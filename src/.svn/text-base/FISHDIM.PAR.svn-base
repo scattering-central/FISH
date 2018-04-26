@@ -1,0 +1,11 @@
+c==== 29/4/98 RKH,  MV max variables, MC constraints, MW workspaces size MN
+C====               MF simultaneous data sets, MI params adjusting(or tied)
+c==== 15/3/4 redim /WORK/ for MN=1024 still need check ftn i/o !
+C==== BEWARE you may want to redimension common/WORK/
+c==== which is very large 
+      PARAMETER (MN=1024)
+      PARAMETER (MV=99)
+      PARAMETER (MC=96)
+      PARAMETER (MW=80)
+      PARAMETER (MF=8)
+      PARAMETER (MI=96)

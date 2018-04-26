@@ -1,0 +1,21 @@
+#
+del fish.dll launcher.exe *.o fish_wrap.c
+del ..\bin
+#
+c:/MinGW/bin/gfortran.exe -D_JNI_IMPLEMENTATION_ -Wl,--kill-at,--subsystem,windows -shared *.o -lgfortran -o fish.dll -mwindows -I.
+copy fish.dll ..\bin\fish.dll
+copy fish.dll ..\fish.dll
+mkdir ..\bin\fish
+copy fish.png ..\bin\fish\fish.png
+
+c:/MinGW/bin/gcc.exe -D_JNI_IMPLEMENTATION_ -c -Ic:/Program\ Files\ (x86)/Java/jdk1.8.0_121/include -Ic:/Program\ Files\ (x86)/Java/jdk1.8.0_121/include/win32 fish.c fish_wrap.c
+
+c:/MinGW/bin/gfortran.exe -c -s -fno-automatic -finit-local-zero -fno-backslash -ffixed-line-length-80 *.f *.F -mwindows -I.	
+
+c:\fish5\swigwin-3.0.12\swig.exe -outdir ../java/fish -package fish -module Core -java fish.i	
+
+windres fish.rc icon.o
+
+c:/MinGW/bin/gcc.exe -Wl,--subsystem,windows -mwindows winlauncher.c icon.o -o launcher.exe
+copy launcher.exe ..\fish.exe
+

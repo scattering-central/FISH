@@ -1,0 +1,55 @@
+        Help file for LOQ plotting routines, very important since
+        commands are stored only here.
+  80  4 HELP
+            Full help instructions.
+  80  1 H
+         Quick list, or H Command for information on any Command.
+  10  1 READ
+            Asks for a list of curves(sets) to be drawn, all on same  
+        axes with different symbols or line types for each. 
+        ( Do H SYMBOL for more info.)
+  20  1 LIST
+            Gives all the details input by READ and more on each curve.
+  30  2 SCREEN
+              Draw on screen.
+  40  1 FILE
+            Put out drawing to a file, for later paper plot.
+  50  1 INDEX
+             Usual master index of all sets in memory.
+  90  4 STOP
+            Returns to main LOQ routines. 
+  61  3 LINEAR
+              plot Y against X values just as supplied.
+  62  2 LOG
+           plot LOG(Y) against X, or use before other plot types to return
+        to base 10 logs.
+  63  2 LN
+          plot LN(Y) against X, or use before other plot types to switch
+        to natural (base e) logarithms.
+  64  2 GUINIER
+               plot LOG(Y) against X**2,  uses log to base 10 unless you
+       have previously issued a LN command.
+  65  1 ZIMM
+            plot 1/Y against X**2.
+  66  2 RODS
+            plot LOG(Y*X) against X**2 for thin rods.
+  67  2 SHEETS
+              plot LOG(Y*(X**2)) against X**2.
+  69  4 LOGLOG 
+              plot LOG(Y) against LOG(X) 
+  68  1 USER
+            plot with your own transformations.
+        These are of the form (X**i)(Y**j)LOG( (X**k)(Y**l) ) where
+        i,j,k,l may be defined differently for both X and Y axes.
+ 100  1 FIT n m
+               straight lines to be fit to sets n to m, will ask for
+        X range for each set.  Will turn "off" the fit if one is
+        already "on". Use LIST to see the gradient etc.
+ 110  2 SYMBOL
+              line types LTYP are 
+        1-straight line segments,   2-smooth curve(local polynomials)
+        3-dashed                    4-dotted  
+        5-symbols of type LSYM=  1-up triangle,  2-down triangle,
+           3- + ,  4- X ,  5-square,  6-diamond, 7-circle,  8- *
+        Some options may not work yet. Avoid circles and * as they
+        take longer to plot.

@@ -1,0 +1,82 @@
+        ( Help file for LOQ, very important as instruction string definitions
+        are read from it. Names may easily be changed, e.g. into another
+        language.  The FORMAT is I4,I3,1X,72A1. The second integer is the
+        minimum number of characters required. NOTE that  the comments
+        sections must start after column 8. Do not use the TAB key as TAB 
+        characters are not always portable to other systems.  )
+ 100  4 HELP
+            lists the entire detailed help file.
+ 100  1 H
+          gives a short list of commands available.
+        HELP Name  or  H Name  gives information on a particular command.
+        Commands may be shortened to their minimum unambiguous length.
+  11  2 READ-DATA
+                 read standard FISH & LOQ format, Q,I(Q),ERROR(Q) file
+  12  2 GETWIR
+              for BINARY linear data input, old Daresbury SAXS format in 
+        file [RKH.DL]Snnnn.FV4, where nnnn is input run number.
+  13  1 OTOKO
+             for BINARY data, Daresbury SAX format
+  14  5 READ3
+             read free format 3 column Q,I(Q),ERROR(Q) file with no header
+  14  2 R3
+             abbreviation for READ3
+  15  5 READ2
+             read free format 2 column Q,I(Q) file with no header
+  15  2 R2
+             abbreviation for READ3
+  16  2 RNILS
+             read ILL, RNILS format Q,I(Q),ERROR(Q) file
+  60  2 LIST
+            to list data set to monitor file ( for lineprinter) or
+        to write out an ASCII set to file.
+  50  2 INDEX
+             show details of the sets you have stored, up to 6 may be 
+        present,( it works rather like a calculator memory).
+  20  2 ARITHMETIC
+                  add, subtract, divide, scale, normalise linear data.
+  32  2 QBIN
+            Bins linear data and/or recalculates Q values.
+  31  2 CENTRE
+              helps to find middle of Daresbury SAXS data set, asks for
+        pixel range L1,L2 to left of beam stop and a guess for mid-point
+        Then it sums (N(R)-N(L) )**2 over R corresponding to L =L1,L2
+        where N(i) is the count per channel. A small range of mid-points
+        is chosen, the "best" may be at the minimum sum. Use with care
+        and plot results to test !!!
+  33  1 L-R
+           Put Left-Right differences for a Daresbury SAXS set into another
+        data set, e.g. ready to plot.
+  34  2 RANGE n
+            Reset pixel range to be used in fits or plots for set n.
+  35  1 WTMEAN
+              To calculate weight means etc. from a polydispersity.
+  36  3 GRIMSON
+               Special calculations for Malcom Grimson, polydisperse hard
+        spheres with excess surfactant micelles.
+  37  1 DESMEAR
+               Desmearing using Vonk method, J.Appl.Cryst. 4(1971)p340.
+  40  1 PLOT
+          Enters longwinded, complicated, but very flexible plot routine.
+        First you will need to set up a list of sets to plot, several can be
+        placed on the same axes.  If in doubt about optional parameters enter
+        zeroes to get default action.  PLOT has its own set of commands and
+        a HELP facility.
+  70  1 FIT
+           Enters least squares model fitting program. This has its own 
+        interactive language and HELP command. A large number of models
+        are available. Soon(?) you will be able to fit more than one linear
+        data set simultaneously with overlapping parameters.
+  80  2 SETUP
+             Allows new input or output files, so there is no need
+        to exit the progam to switch to another data file. Enter zero
+        to just list currently opened files.
+  90  4 STOP
+            Use this for a graceful exit from the program, don't forget to
+        PRINT MON.LIS to the lineprinter if the monitor might contain
+        useful information. It should provide a record of what you did on
+        the screen. Tidy up any output files, note that on a VAX their names
+        default to FOR00n.DAT, where n is a channel number, if they were not
+        assigned elsewhere.
+  90  4 QUIT
+            Same as STOP

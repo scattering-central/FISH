@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 67
+/subversion/ncd/!svn/ver/304/sas-software/fish/trunk/java/fish/plot
+END
+SeriesEdit.java
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/subversion/ncd/!svn/ver/277/sas-software/fish/trunk/java/fish/plot/SeriesEdit.java
+END
+XYErrorRenderer.java
+K 25
+svn:wc:ra_dav:version-url
+V 88
+/subversion/ncd/!svn/ver/246/sas-software/fish/trunk/java/fish/plot/XYErrorRenderer.java
+END
+SeriesList.java
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/subversion/ncd/!svn/ver/277/sas-software/fish/trunk/java/fish/plot/SeriesList.java
+END
+PlotData.java
+K 25
+svn:wc:ra_dav:version-url
+V 81
+/subversion/ncd/!svn/ver/294/sas-software/fish/trunk/java/fish/plot/PlotData.java
+END
+PlotFrame.java
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/subversion/ncd/!svn/ver/304/sas-software/fish/trunk/java/fish/plot/PlotFrame.java
+END
+Series.java
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/subversion/ncd/!svn/ver/294/sas-software/fish/trunk/java/fish/plot/Series.java
+END
+TextTable.java
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/subversion/ncd/!svn/ver/281/sas-software/fish/trunk/java/fish/plot/TextTable.java
+END
+XYErrorSeriesRenderer.java
+K 25
+svn:wc:ra_dav:version-url
+V 94
+/subversion/ncd/!svn/ver/262/sas-software/fish/trunk/java/fish/plot/XYErrorSeriesRenderer.java
+END

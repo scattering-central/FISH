@@ -1,0 +1,1635 @@
+C==== NEXT CARD IS A PFORT CONTROL CARD:  LIST, SYMBOL-TABLE, XREF-LIST, INTER-UNIT-CHECKS
+C* L,NS,NR,P
+      SUBROUTINE POLSET(RR,P,KY,KS)
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985, 2003
+C==== written by R.K.Heenan at UKC and RAL 1983-1989
+C==== 05/08/03 improve derivs of polydispersity by properly recomputing
+c==== normalisation volume, add VOLP() to /TWO/ and change several routines.
+C====
+C==== 25/5/94  KS now passed through to help allow separate multi-shell 
+c===  contrasts for different simultaneous data sets !
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION RR(MN),P(MN)
+C==== ASSUME RR AND P ARE STORED IN /ONE/ SO SET NCH(KY) ETC.
+C==== ARRAY RR IS ONLY FOR PLOT ROUTINES
+C====  CON(2) AND CON(3) ARE USED FOR CALCULATED VALUES VOLUME AND SIGMA(R)/RBAR
+C====  CON(4) AND CON(5) ARE USED FOR DELTA(R) AND RMAX FOR THE POLYDISPERSITY
+C====  CON(6) AND CON(7) ARE USE FOR THE CALC. ENTROPY AND ITS ESTIMATOR B
+C==== ENTROPY= - INTEGRAL( P(R)LOGE( P(R)/B )
+C==== NOTE THAT THE "MODEL" 5 CARDS HAVE THE GUESSES OR OBSERVATIONS
+C==== FOR VOLUME, SIGMA(R)/RBAR, AND ENTROPY
+C==== REMEMBER TO SET CON(4),CON(5) AND CON(7), THESE ARE N4,N5,N7 IN THE
+C==== TALK ROUTINE SO CAN BE DONE INTERACTIVELY, THE NUMBER OF CON()'S IS 
+C==== INCREASED AUTOMATICALLY ON THE FIRST K CARD.
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/WORK/DWE(MI),D(MV),DWD2(MI,MI),
+     * V2(MV),PM(10),PM2(10),DD(MV,3),WT(10),dumDBIG(MI,MN),FILL(1859)
+      COMMON/ONE/NCH(MW),NC1(MW),NC2(MW),NMC(MW),NC3(MW),NC4(MW),IDC(MW),
+     *NSUM(MW),IC1(MW),IC2(MW),IC3(MW),LAB(3,MW),LAB2(20,3,MW),RSPARE(10,MW),
+     *C(MN,MW),Q(MN,MW),E(MN,MW),NDIM
+C2345 789012345678901234567890123456789012345678901234567890123456789012
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,IX,NX1,NX2,IRX,
+     >     LS2(12),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+      NPP=0
+      IY=0
+      IX=0
+      NX1=1
+      NX2=0
+      IRX=2
+C==== DEFAULT DELTA R TO 1 ANGSTROM INTERVALS
+      IF(CON(4).LE.0.0)CON(4)=1.0
+      IF(CON(5).LE.0.0)CON(5)=300.
+C==== CHECK THE ENTROPY ESTIMATOR TO AVOID LOG(ZERO)
+      DR=CON(4)
+      ABC(2)=DR
+      ABC(1)=DR
+      ABC(3)=1.0
+C====      ABC(1) HAS RSTART  :   THESE MAY NEED TO VARY IN DERIVATIVE ROUTINES
+C====          2  HAS DR
+C====          3  HAS VNORM, THIS STARTS AS 1.0 BUT IS RESET BELOW IF VOLUME IS
+C====             A PARAMETER IN THE MODEL USED
+      PR1=DR
+      PR2=CON(5)
+      NR1=1
+      NR2=1
+C==== SEARCH FOR MODEL 6, POLYDISPERSITY,   PARAMETERS  V(NPP) TO V(NPM)
+c==== make sure they only apply to data set KS, via model 88 cards. 25/5/94 RKH
+      IM1=KS
+      DO 50 I=1,NP
+      IF(LM(I).EQ.88)THEN
+        IM1=LTYP(I)
+        IF(IM1.LE.0)IM1=KS
+      END IF
+      IF(IM1.NE.KS)GOTO 50
+      IF(LM(I).NE.6)GOTO 50
+      NPP=I
+      GOTO 80
+   50 CONTINUE
+      RETURN
+   80 R=0.0
+      IX=1
+C==== THESE NPP ETC. ARE USED LOTS IN PCALC
+      NPP1=NPP+1
+      NPP2=NPP1+1
+      NPP3=NPP2+1
+      NPM=NPP3
+C====
+C==== CHECK FOR STICK MODEL
+      IF(LTYP(NPP).NE.71)GOTO 905
+      DO 85 I=NPP,NP
+      IF((LTYP(I)/10).NE.7)GOTO 87
+   85 CONTINUE
+      I=I+1
+   87 NPM=I-1
+      IF((NPM-NPP).GE.8)GOTO 905
+      WRITE(JS,88)
+      WRITE(JF,88)
+   88 FORMAT(1X,'ERROR, NOT ENOUGH CARDS FOR STICK MODEL !!!!!')
+C====      WRITE(JS,99)NPP,V(NPP),V(NPP1),V(NPP2),V(NPP3)
+   99 FORMAT(I5,1P4E11.3)
+C====    check for multi-shell contrast, model 10
+C====    CARD IRX HAS THE POLYDISP APPLIED, IDENTIFIED BY PSHIFT(IRX) = -2.0
+C====
+C==== IX=2 IS FOR MULTI-SHELL CONTRAST GIVEN BY MODEL 10
+C==== LTYP=1 SCALE IS FOLLOWED BY LTYP=2, RADIUS, BUILD UP A SERIES OF STEPS,
+C====     USING CONSTRAINT ROUTINE AS NEEDED TO TIE STEP POSITIONS TOGETHER.
+C==== USE LTYP=3,4 AND IX=3....   FOR OTHER DESCRIPTIONS OF CONTRAST
+  905 IM1=KS
+      DO 900 I=1,NP
+c==== make sure they only apply to data set KS, via model 88 cards. 25/5/94 RKH
+      IF(LM(I).EQ.88)THEN
+        IM1=LTYP(I)
+        IF(IM1.LE.0)IM1=KS
+      END IF
+      IF(IM1.NE.KS)GOTO 900
+      IF(LM(I).EQ.10) GOTO 910
+  900 CONTINUE
+      GOTO 950
+  910 IX=2
+      NX1=I
+      IRX=I+1
+      DO 920 I=IRX,NP
+      IF(LM(I).NE.10)GOTO 930
+      IF(LTYP(I).NE.2.AND.LTYP(I).NE.12)GOTO 920
+      IF(PS(I).GT.(-1.5))GOTO 920
+C==== IDENTIFY A REFINING RADIUS TO APPLY POLDISP TO, IT HAS PS()=-2.
+C==== AS A DEFAULT,TAKE THE FIRST RADIUS PARAMETER THAT APPEARS.
+      IRX=I
+  920 CONTINUE
+      I=I+1
+  930 NX2=I-1
+C====
+C====
+  950 J=1
+      P(1)=0.0
+      IPD=1
+      JPD=1
+C====    DETERMINE TYPE OF CALCULATION TO BE DONE IN FUNCTION PFUNCT
+C====      AND ROUTINE PCALC
+C====    IPD=-2 FOR LOG-NORMAL
+C====        -1 FOR SCHULTZ 
+C====        =0 FOR POLYNOMIAL
+C====        =1 FOR (R2-R1) DEFINED. POLYNOMIAL ( DEFAULT)
+C====        =2 FOR STICK MODEL
+C====        =3 FOR R**N WHERE N IS ADJUSTED
+C====    JPD=1 (DEFAULT) IF FIRST PARAMETER V(NPP) IS VOLUME - DERIVATIVE 
+C====           IS SIMPLE AND POLYDISPERSITY IS SCALED TO UNIT VOLUME
+C====       =0 OTHERWISE  (E.G.IS SET IN PCOEFF FOR POLYNOMIALS LTYP= 51 AND 61)
+C====
+C==== IF IPD=1 or 3, R1 AND R2 AS PR1 AND PR2 MUST BE SET HERE FOR PCOEFF TO WORK
+      IF(IPD.EQ.1.OR.IPD.EQ.3)PR1=V(NPP2)
+      IF(IPD.EQ.1.OR.IPD.EQ.3)PR2=V(NPP1)+PR1
+C==== SET UP POLYNOMIAL COEFFS TO MAKE LATER CALCS EASIER
+      CALL PCOEFF(R,R2,DR)
+      IF(IPD.EQ.1.OR.IPD.EQ.3)CON(5)=R2
+C====
+      R=R-DR
+   95 I=1
+   97 IERR=0
+C==== INVESTIGATE P(R) STEP BY STEP TO ENSURE IT IS POSITIVE AND SET RANGE
+C====   R1 TO R2 IF NOT DEFINED BY THE MODEL
+C==== should set up same P(R) as does PCALC (ready for METH=1 in PREDER ?)
+  100 R=R+DR
+      IF(R.GT.CON(5).OR.J.GT.NDIM)GOTO 130
+      A=PFUNCT(R,IERR)
+      IF(IERR)97,108,130
+  108 IF(I.EQ.2)GOTO 120
+C==== change .LT. to .LE.1.0E-30  16/2/89, to help reduce range for Schultz
+  110 IF(A.LE.1.0E-30)GOTO 100
+      I=2
+      PR1=R
+  120 IF(A.LE.0.0)GOTO 130
+      RR(J)=R
+      P(J)=A
+      J=J+1
+      GOTO 100
+  130 NR2=MAX(1,J-1)
+      PR2=R-DR
+      IF((IPD.EQ.1.OR.IPD.EQ.3).AND.ABS(PR2-R2).LE.DR)PR2=R2
+      IF(IPD.EQ.2.AND.ABS(PR2-V(NPM)).LE.DR)PR2=V(NPM)
+C==== IF USER HAS LET P(R) GO NEGATIVE HIS R1,R2 MAY BE IGNORED AND PR1,PR2 TAKEN TO NEAREST DR
+C====    FIRST AND LAST ARE * BY 0.5 TO HELP SIMPSON RULE, CHANGED BACK IN REFINE
+      P(NR1)=0.5*P(NR1)
+      P(NR2)=0.5*P(NR2)
+C==== SET PARAMETERS FOR WORK SPACE KY WHICH IS USED TO STORE P(R)
+      NCH(KY)=NR2
+      NC1(KY)=1
+      NC2(KY)=0
+      NMC(KY)=0
+      NC3(KY)=NR1
+      NC4(KY)=NR2
+      IDC(KY)=4
+C
+C==== TEST ALSO FOR REFINING POLYDISPERSE COEFFS.
+C==== 05/08/03 initialise VOLP() values
+      DO 210 I=NPP,NPM
+      VOLP(I) = 1.0
+      IF(ABS(PS(I)).GT.0.01)IY=1
+  210 CONTINUE
+C
+C==== CALCULATE THE MOMENTS OF P(R)  according to integration scheme
+c==== note .le.0 not defined,  1- "native" i.e. trapezium or Simpson
+c====    2- Simpson (via quadrature route), 3-9 quadratures
+c
+C==== 23/3/93 set up the two integration schemes, for Q and R once and
+c==== for all here ( previously had to keep hopping between them !)
+      NSIMP=MIN(128,IFIX(PR2/CON(4)))
+      NSIMP=MAX(7,NSIMP)
+      IF(NMETH(NPP).LT.0.OR.NMETH(NPP+1).LT.0)THEN
+         CALL WTPIC(P,PM)
+C==== note this calls WTSET for both also, if leave until here can
+c==== waste store space for IQ(NPP)
+      ELSE
+      IF(NMETH(NPP).GE.2)CALL WTSET(NPP,PR1,PR2,NSIMP)
+      IF(NMETH(NPP1).GE.2)CALL WTSET(NPP1,PR1,PR2,NSIMP)
+      END IF
+
+      CALL POLMOM(PM,P)
+C==== CON(2),CON(3) SAVE CALC VALUES OF VOLUME AND SIG(R)/RBAR
+C==== CON(6) SAVES CALC VALUE OF ENTROPY
+      CON(2)=PM(1)
+      CON(3)=PM(2)
+      CON(6)=PM(6)
+      ABC(1)=PR1
+      IF(JPD.EQ.0)GOTO 250
+C
+C==== IF VOLUME IS A PARAMETER RESCALE P(R) AND ITS MOMENTS TO SUIT.
+C==== CHANGE BOTH CON() AND PM() WHICH IS NEEDED BY PREDER ETC.
+C==== THE ENTROPY IS ALREADY CALCULATED WITH P(R) NORMALISED TO UNITY
+C
+      IF(CON(2).LE.0.0)CON(2)=1.01010101
+      A=V(NPP)/CON(2)
+      I=0
+c====      WRITE(6,'(1X,I6,17X,1P2E17.5)')I,CON(2),A
+C==== SET VNORM=ABC(3) TO BE USED IN ALL SUBSEQUENT CALCS
+      ABC(3)=A
+C==== ADJUST THE VOLUME
+      CON(2)=V(NPP)
+      PM(1)=V(NPP)
+C==== NORMALISE THE INTEGRAL OF P(R)
+      PM(5)=PM(5)*A
+C==== NORMALISE P(R) TO UNIT VOLUME
+      PLO=P(NR1)*A
+      PHI=PLO
+      DO 220 I=NR1,NR2
+      P(I)=P(I)*A
+      PLO=AMIN1(PLO,P(I))
+  220 PHI=AMAX1(PHI,P(I))
+C==== RESCALE THE QUADRATURE WEIGHTS ( Y VALUES) 
+      IF(NMETH(NPP).GE.2)THEN
+      DO 225 I=IB(IQ(NPP))+1 , IB(IQ(NPP))+NGPT(IQ(NPP))
+  225 WTR(I)=WTR(I)*A
+      END IF
+      IF(NMETH(NPP1).GE.2)THEN
+      DO 230 I=IB(IQ(NPP1))+1 , IB(IQ(NPP1))+NGPT(IQ(NPP1))
+  230 WTR(I)=WTR(I)*A
+      END IF
+C
+C==== FINALLY, IF NEEDED, SET UP THE QUADRATURE INTEGRATION FOR P(R)
+C==== TO BE USED IN POLCAL()
+c
+c==== 05/08/03 
+      IF(IY.EQ.1)THEN
+      DO 218 I=NPP1,NPM
+      IF(ABS(PS(I)).GT.0.01)THEN
+      V(I)=V(I)+DEL(I)
+C==== NOTE here need to use integration scheme NPP1 and NOT NPP
+      CALL PCALC(P,NPP1)
+      CALL POLVOL(A,P)
+      VOLP(I)=V(NPP)/A
+c====      WRITE(6,'(1X,I6,1P3E17.5)')I,V(I),A,VOLP(I)
+C==== N.B. call to PCALC uses VNORM from above, so VOLP is close to unity
+c==== and exactly so for delta rho contrast terms
+      V(I)=V(I)-DEL(I)
+      END IF
+C==== redo calc of poly here, will include VNORM
+      CALL PCALC(P,NPP1)
+  218 CONTINUE
+      END IF
+c
+c====      I=99
+c====      CALL POLVOL(A,P)
+c====      WRITE(6,'(1X,I6,1P2E17.5)')I,A
+c==== now do again for polydisperse I(Q,R) calculation, which MAY be
+c==== different scheme and is stored in different place
+      CALL PCALC(P,NPP)
+c
+  250 continue
+c==== 23/3/93 removed: IF(METH.NE.0.AND.METH.NE.METH2)CALL
+c====     *WTSET(METH,NGPT,PR1,PR2,RG,WTR,MV,MV)
+C      WRITE(JS,201)PR1,PR2,NR1,NR2,DR,CON(5),PLO,PHI,CON(6),CON(7)
+C      WRITE(JF,201)PR1,PR2,NR1,NR2,DR,CON(5),PLO,PHI,CON(6),CON(7)
+C  201 FORMAT(2X,'POLYDISPERSE R=',1PE10.2,' TO',E10.2,'  N=',I4,
+C     *' TO',I4,/'  DR=N(4)=',E10.2,' RMAX=N(5)=',E10.2,
+C     */,'  PMIN=',E10.3,' PMAX=',E10.3,' ENT=',E10.3,' B=N(7)=',E10.3)
+C      WRITE(JS,301)(PM(I),I=1,5)
+C      WRITE(JF,301)(PM(I),I=1,5)
+C  301 FORMAT(2X,'VNORM=',1PE12.5,'  SIG(R)/RB=',E11.4,'  SIG**2=',E11.4,
+C     * /'  RBAR=',E11.4,'  AREA P(R)=',E11.4)
+      WRITE(JS,201)PR1,PR2,CON(5),NR1,NR2,PM(4),PM(2),DR
+      WRITE(JF,201)PR1,PR2,CON(5),NR1,NR2,PM(4),PM(2),DR
+  201 FORMAT(2X,'POLYDISP calc for R=',1PE10.2,' to',E10.2,
+     *' RMAX=N(5)=',E10.2,' N=',I4,
+     *' to',I4,/,1X,' calc RBAR=',E11.4,'   SIG(R)/RB=',E11.4,
+     *'   step DR=N(4)=',E10.2 )
+      RETURN
+      END
+C 
+      FUNCTION PFUNCT(R,IERR)
+C
+C==== COMPUTE VALUE OF POLYDISPERSE FUNCTION AT A SINGLE POINT R
+C==== USED BY ROUTINES POLSET() AND WTSET()
+C====   VNORM IS ABC(3) IN POLSET
+C
+      INCLUDE 'FISHDIM.PAR'
+      COMMON/POLY/PR1,PR2,NR1,NR2,AB(2),VNORM,ABC(2),RB,PA,PB,PC,PD,IPD,
+     *  JPD,NPP,NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+      I=IPD+3
+      GOTO(101,102,105,105,200,300),I
+C====  log-normal 
+  101 PFUNCT= VNORM*RLOGNORM(R-RB,PC,PB-RB)
+      RETURN
+C====  Schultz replace by WIFD version (corrected) 26/1/89
+  102 PFUNCT= VNORM*SCHULTZ(R-RB,PC,PB-RB)
+      RETURN
+C==== ANALYTIC POLYNOMIAL
+  105 PFUNCT=VNORM*(RB +R*PA +R*R*PB +R*R*R*PC)
+      RETURN
+C
+C==== INTERPOLATED POLYNOMIAL ( STICK MODEL)
+  200 PFUNCT=VNORM*PA*RLAGR(V,R)
+      RETURN
+C====  R**N FORM WHERE N IS REFINED
+  300 PFUNCT=VNORM*(ABS(R-RB)**PA)
+      RETURN
+      END
+C
+      SUBROUTINE PCALC(P,NPAR)
+C
+C==== COMPUTE VALUES OF POLYDISPERSE FUNCTION OVER WHOLE R RANGE (METH=0 or 1)
+C==== OR SET UP QUADRATURE WEIGHTS for later use in POLCAL( ) (METH=2-9)
+C==== 2/4/93 care ! METH=NMETH(NPAR) points at the integration scheme
+c==== this routine can be called for an I(Q,P(R) ) integration, NPAR=NPP
+c==== or a polydispersity moment integration of P(R),  NPAR=NPP1
+C
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1993
+C====   VNORM IS ABC(3) IN POLSET
+C
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN)
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/POLY/PR1,PR2,NR1,NR2,AB(2),VNORM,ABC(2),RB,PA,PB,PC,PD,IPD,
+     *       JPD,NPP,NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+C2345 789012345678901234567890123456789012345678901234567890123456789012
+c
+c==== N.B. this brings back R1 & R2
+      CALL PCOEFF(R1,R2,DR)
+c
+      IF(NMETH(NPAR).GT.1)GOTO 200
+      II=IPD+3
+      R=R1
+      DO 100 I=NR1,NR2
+      GOTO(65,60,50,50,70,80),II
+   50 P(I)=VNORM*(RB+ R*PA +R*R*PB +R*R*R*PC)
+      GOTO 100
+   60 P(I)=VNORM*SCHULTZ(R-RB,PC,PB-RB)
+      GOTO 100
+   65 P(I)=VNORM*RLOGNORM(R-RB,PC,PB-RB)
+      GOTO 100
+   70 P(I)=VNORM*PA*RLAGR(V,R)
+      GOTO 100
+   80 P(I)=VNORM*(ABS(R-RB)**PA)
+  100 R=R+DR
+C==== HALVE FIRST AND LAST POINTS TO HELP NUMERICAL INTEGRATIONS
+C==== VALUES ARE RESTORED IN REFINE ROUTINE
+      P(NR1)=0.5*P(NR1)
+      P(NR2)=0.5*P(NR2)
+      RETURN
+c=== CHECK THIS 23/3/93 beware changes of R range due to deriviatives ?
+c====  200 CALL WTSET(METH,NGPT,R1,R2,RG,WTR,MV,MV)
+  200 CALL WTSET(NPAR,R1,R2,NSIMP)
+      RETURN
+      END
+C
+      SUBROUTINE PCOEFF(R,R2,DR)
+C==== PRODUCE COEFFICENTS OF A CUBIC POLYNOMIAL WHERE POSSIBLE ( IPD=0 OR 1)
+C==== ELSE GENERALLY MODIFY INPUT PARAMETERS FOR EASIER COMPUTATION OF P(R)
+C==== IN ROUTINE PCALC OR FUNCTION PFUNCT
+C
+C====    R (=R1), R2 and DR are RETURNED to the calling routine
+C
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985.
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+C==== CHANGE THIS AND ROUTINE POLSET TO ALTER FORM OF DISTRIBUTION
+      INCLUDE 'FISHDIM.PAR'
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+c
+c==== set default values R & R2, which MAY BE CHANGED BELOW
+      R=PR1
+      R2=PR2
+      DR=CON(4)
+      LT=LTYP(NPP)/10+1
+C
+      GOTO(400,410,420,430,440,450,460,470,480,490),LT
+C==== TYPE 11   SCHULTZ LIKE,  vol, rbar, R1, sigma/(rbar-R1)
+  410 PA=V(NPP)
+      PB=V(NPP1)
+      RB=V(NPP2)
+      PC=V(NPP3)*(PB-RB)
+      IPD=-1
+      R=V(NPP2)
+      IF(R.LT.0.0)R=0.0
+C==== AVOID R-RSHIFT .LE.0.0 ELSE LOG OF NEGATIVE IN PFUNCT
+      GOTO 95
+C==== TYPE 91  LOG-NORMAL vol, rbar, R1, sigma/(rbar-R1)
+  490 PA=V(NPP)
+      PB=V(NPP1)
+      RB=V(NPP2)
+      PC=V(NPP3)*(PB-RB)
+      IPD=-2
+      R=V(NPP2)
+      IF(R.LT.0.0)R=0.0
+C==== AVOID R-RSHIFT .LE.0.0 ELSE LOG OF NEGATIVE IN PFUNCT
+      GOTO 95
+C==== TYPE 01  POLYNOMIAL
+  400 RB=V(NPP)
+      PA=V(NPP1)
+      PB=V(NPP2)
+      PC=V(NPP3)
+      R=0.0
+      IPD=0
+      JPD=0
+      GOTO 95
+C==== TYPE 61 REFORMULATED POLYNOMIAL
+  460 RB=V(NPP)
+      PA=RB*V(NPP1)
+      PB=PA*V(NPP2)
+      PC=PB*V(NPP3)
+      R=0.0
+      IPD=0
+      JPD=0
+      GOTO 95
+C==== TYPE 71  n(72,73) STICK MODEL FOR POLYDISPERSE FUNCTION, AT LEAST 9 CARDS ARE NEEDED
+C====  6 71 VOL, 6 72 C1, 6 73 R1, C2 , R2, ......R4
+C==== ASSUMED IN ORDER OF INCREASING R
+  470 R2=V(NPM)
+      R=V(NPP2)
+      PA=V(NPP)
+      CON(5)=R2
+      IPD=2
+      GOTO 95
+C==== TYPE 81, R**N HAS RANGE DEFINED, BUT USES FOURTH CARD FOR N
+  480 PA=V(NPM)
+      RB=V(NPP2)-DR
+      IF(PA.LT.0.0)RB=RB+V(NPP1)+2.*DR
+      PA=ABS(PA)
+C====     x**0 is undefined exponentiation
+      IF(PA.LT.1.E-12)PA=1.0
+      IPD=3
+      GOTO 445
+C==== TYPES 2,3,4,5 ALL HAVE SCALE, (R2-R1), R1 AND SPARE PARAM CARDS
+C==== TYPE 21    SYMMETRIC
+  420 PB=-V(NPP)*4.0/V(NPP1)**2
+      PA=-PB*(V(NPP1)+2.0*V(NPP2))
+      PC=0.0
+      RB=PB*V(NPP2)*(V(NPP1)+V(NPP2))
+      GOTO 445
+C==== TYPE 31   TRIANGULAR
+  430 PA=-V(NPP)/V(NPP1)
+      RB=-PA*(V(NPP1)+V(NPP2))
+      PB=0.0
+      PC=0.0
+      GOTO 445
+C==== TYPE 41   CONCAVE DECREASING
+  440 PB=V(NPP)/V(NPP1)
+      PA=-2.*PB*(V(NPP1)+V(NPP2))
+      RB=PB*(V(NPP1)+V(NPP2))**2
+      PC=0.0
+C==== SET R START AND DR, THEY ARE ALSO PASSED TO POLCAL IN ABC()
+C====   PR1 AND PR2 REMAIN CONSTANT AT ORIG RANGE FOR THIS ITERATION
+C====   R1,R2 AND DR NEED TO ALTER IN DERIVATIVES, HENCE THE TRICKY CALC HERE !!
+C==== EXPAND DR SO THAT FITS BETWEEN R1 AND R2 SO SIMPSON RULE INTEGRAL STILL
+C==== WORKS, QUADRATURE METHODS ARE NOT SO FUSSY.
+  445 RR=AMAX1(PR2-PR1,CON(4))
+      DR=V(NPP1)*CON(4)/RR
+C====      R=V(NPP2)+0.5*(RR-V(NPP1))  changed 6/2/89
+      R= V(NPP2)
+      R2=R+V(NPP1) 
+      GOTO 95
+C==== TYPE 51   CONSTANT
+  450 RB=V(NPP)
+      PA=0.0
+      PB=0.0
+      PC=0.0
+      GOTO 445
+   95 ABC(1)=R
+      ABC(2)=DR
+      RETURN
+      END
+      FUNCTION RLAGR(V,R)
+C==== LAGRANGE 4 POINT CUBIC INTERPOLATION THROUGH UNEQUALLY SPACED POINTS
+C==== SPECIALLY SET UP FOR STICK MODEL. NOTE IT SEARCHES FROM THE LOWEST R EACH
+C==== TIME, FOR A LOT OF STICKS THIS WILL WASTE TIME.
+C==== temporary fix 1/3/90 to stop from going -ve between sticks
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION V(MV)
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      RTOL=0.0001
+      J=NPP+6
+   40 IF(R.LE.V(J)+RTOL)GOTO 60
+      J=J+2
+   50 IF(J.LT.NPM)GOTO 40
+      IF(ABS(R-V(NPM)).LT.RTOL)GOTO 90
+      J=NPM-2
+   60 IF(ABS(R-V(J)).LT.RTOL)GOTO 90
+      A=0.0
+      I1=J-4
+      I2=J+2
+      DO 80 II=I1,I2,2
+      T=1.0
+      DXI=V(II)
+      DO 70 JJ=I1,I2,2
+      IF(II.EQ.JJ)GOTO 70
+      DXJ=V(JJ)
+      T=T*(R-DXJ)/(DXI-DXJ)
+   70 CONTINUE
+   80 A=A+V(II-1)*T
+C
+C====   fixed here RKH 1/3/90
+      IF(A.LT.1.E-24)A=1.E-24
+      RLAGR=A
+      RETURN
+   90 A=V(J-1)
+C====   fixed here RKH 1/3/90
+      IF(A.LT.1.E-24)A=1.E-24
+      RLAGR=A
+      RETURN
+      END
+C
+      SUBROUTINE POLCAL(Q,P,SUM,SUM1,SUMP)
+C==== THIS ACTUALLY CALCULATES THE INTENSITY AND ITS DERIVATIVES
+C==== FOR A POLYDISPERSE SPHERE AT A SINGLE Q VALUE
+c==== RKH 18/2/02 reset model 10 radii to calculated mean polydisp values after
+c==== computing the integral of I(Q), done once only in FISH4 at end of DERIV
+C==== MODIFIED 26/1/89  to calculate (sum (F(Q))**2 as well as sum( F(Q)**2 )
+C==== for which sum(P(R)) is assumed 1.0, so we have to re-normalise BETA
+C====   which should result in BETA being between zero and 1.0
+C====
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985, 2002
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN),DL(MV)
+C==== DL() IS A LOCAL DERIVATIVE, TO AVOID ANY PROBLEMS WHEN CONDER IS CALLED
+C==== WITH OTHER CONSTRAINTS, THE CALC HERE REQUIRES CONDER TO BE USED AT EACH
+C==== STEP IN A COMPLEX CONTRAST.  why ? took this out 11/11/94 
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/ONE/NCH(MW),NC1(MW),NC2(MW),NMC(MW),NC3(MW),NC4(MW),IDC(MW),
+     *NSUM(MW),IC1(MW),IC2(MW),IC3(MW),LAB(3,MW),LAB2(20,3,MW),RSPARE(10,MW),
+     *C(MN,MW),QQ(MN,MW),E(MN,MW),NDIM
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,IX,NX1,NX2,IRX,
+     >     LS2(12),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      COMMON/WORK/DWE(MI),D(MV),DWD2(MI,MI),
+     * V2(MV),PM(10),PM2(10),DD(MV,3),WT(10),DBIG(MI,MN),FILL(1859)
+      SUM=0.0
+      SUM1=0.0
+      SUMP=0.0
+C==== THIS IS 4*PI, NOTE 4*PI*R**3/(Q*R)**3 CANCELS TO 4*PI/Q**3 AND AVOIDS 
+C===     DIV BY ZERO AT R=0
+      A=12.56637062/(Q**3)
+      IF(IABS(IX).NE.1)GOTO 2000
+C
+C====  POLYDISPERSE SPHERES - SIMPLE CONTRAST    IX=1  =====================
+C
+      IF(NMETH(NPP).GT.1)GOTO 200
+C==== USES TRAPEZIUM RULE, PCALC HAS HALVED FIRST AND LAST POINTS ALREADY
+C==== SUM OF INTENSITIES (NON-INTERACTING PARTICLES) NOT (SUM AMPLITUDES)**2
+      QR=Q*ABC(1)
+      DQR=Q*ABC(2)
+C====               ABC(1) HAS RSTART ,ABC(2) DR  SET UP IN PCALC OR POLSET
+      DO 100 J=NR1,NR2
+      F=(SIN(QR)-QR*COS(QR))*A
+      SUM=SUM+P(J)*F**2
+      SUM1=SUM1+P(J)*F
+      SUMP=SUMP+P(J)
+  100 QR=QR+DQR
+      SUM=SUM*ABC(2)
+      SUM1=SUM1*ABC(2)
+      SUMP=SUMP*ABC(2)
+      RETURN
+C
+C==== QUADRATURE/SIMPSON    P(R) IS INCLUDED IN WT() IN WTSET
+  200 II=IB(IQ(NPP))
+      DO 250 I=II+1,II+NGPT(IQ(NPP))
+      QR=Q*RG(I)
+      F=(SIN(QR)-QR*COS(QR))*A
+      SUMP=SUMP+WTR(I)
+      SUM1=SUM1+WTR(I)*F
+  250 SUM=SUM+WTR(I)*F**2
+      RETURN
+C
+C====  MULTI-SHELL MODEL 10    IX=2, ONLY USES QUADRATURE METHOD
+C====                          IX=-2 from polder & wtpic, skips deriv calc
+C=== ( changed 25/7/89, was erroneously using IY before)
+C=== RKH  5/7/95 added "fuzzy shell" ideas -
+ 2000 IF(IABS(IX).NE.2)GOTO 3000
+      II=IB(IQ(NPP))
+C==== LOOP V(IRX) - THE ONE WITH SHIFT -2.0, OVER THE R-VALUES IN THE 
+C==== QUADRATURE STORED IN RG()
+      DO 400 I=II+1,II+NGPT(IQ(NPP))
+C==== zero DL() inside NGPT loop else CONDER may cumulatively scramble DL()
+      DO 340 J=1,NP
+  340 DL(J)=0.0
+      V(IRX)=RG(I)
+      CALL CONTIE(1,NC)
+      SUMF=0.0
+C==== NOW LOOP OVER THE STEPS IN THE CONTRAST PROFILE
+      RRA=0.0
+      CQRA=1.0
+      SQRA=0.0
+c
+      DO 350 J=NX1,NX2,2
+      RRB=V(J+1)
+      QR=Q*RRB
+c====  Need these for all shells, in case next one needs them in RRA,CQRA,SQRA swap
+c====  at end of loop
+      SQR=SIN(QR)
+      CQR=COS(QR)
+C
+      IF(LTYP(J).EQ.1)THEN
+C==== normal shell
+      FF=A*(SQR-QR*CQR)
+      IF(IX.GE.0)THEN
+C==== compute the derivative for any adjusting parameters in the contrast
+      IF(ABS(PS(J)).GT.0.01)DL(J)=FF
+      IF(ABS(PS(J+1)).GT.(0.01).AND.(J+1).NE.IRX)DL(J+1)=A*Q*QR*SQR*V(J)
+      END IF
+C
+      ELSE IF(LTYP(J).EQ.11)THEN
+C==== fuzzy shell SKIP IF NO SHELL ( TO AVOID DIV BY ZERO )
+      IF(RRB.GT.RRA)THEN
+      FF=A*(2.*(CQRA-CQR)/Q +RRA*SQRA -RRB*SQR)/(RRB-RRA)
+      IF(IX.GE.0)THEN
+C==== compute the derivative for any adjusting parameters in the contrast
+      IF(ABS(PS(J)).GT.0.01)DL(J)=FF
+      IF(ABS(PS(J+1)).GT.(0.01).AND.(J+1).NE.IRX)DL(J+1)=
+     > ( A*V(J)*(SQR -QR*CQR) -V(J)*FF ) /(RRB-RRA)
+C==== check for a preceding refining radius:
+      IF( (J-1).GT.NX1)THEN
+      IF(ABS(PS(J-1)).GT.(0.01).AND.(J-1).NE.IRX)DL(J-1)=DL(J-1)
+     > + ( A*V(J)*(-SQRA +Q*RRA*CQRA) +V(J)*FF ) /(RRB-RRA)
+      END IF
+      END IF
+      END IF
+C
+      ELSE IF(LTYP(J).LE.51)THEN
+C==== exponential shells
+      FF = SHELLEXP(LTYP(J),Q,RRA,RRB)
+      IF(IX.GE.0)THEN
+C==== compute the derivative for any adjusting parameters in the contrast
+      IF(ABS(PS(J)).GT.0.01)DL(J)=FF
+      IF(ABS(PS(J+1)).GT.(0.01).AND.(J+1).NE.IRX)DL(J+1)=
+     > V(J)*(SHELLEXP(LTYP(J),Q,RRA,RRB+DEL(J+1))-FF)/DEL(J+1)
+C==== check for a preceding refining radius:
+      IF( (J-1).GT.NX1)THEN
+      IF(ABS(PS(J-1)).GT.(0.01).AND.(J-1).NE.IRX)DL(J-1)=DL(J-1)
+     > +V(J)*(SHELLEXP(LTYP(J),Q,RRA+DEL(J-1),RRB)-FF)/DEL(J-1)
+      END IF
+      END IF
+C
+      ELSE IF(LTYP(J).EQ.61)THEN
+c==== above line said I not J until corrected 09/05/05 RKH 
+c==== end-on cylindrical shell (added here 19/4/00 )
+      SS1=3.141592654*RRB**2
+      FF=SS1*TRJ1XBYX(QR)
+      IF(IX.GE.0)THEN
+C==== compute the derivative for any adjusting parameters in the contrast
+      IF(ABS(PS(J)).GT.0.01)DL(J)=FF
+      IF(ABS(PS(J+1)).GT.(0.01).AND.(J+1).NE.IRX)DL(J+1)= V(J)*(2.*FF/RRB +
+     >      (SS1*TRJ1XBYX(Q*(RRB+DEL(J+1)))-FF)/DEL(J+1) )
+	END IF
+
+C
+      ELSE IF(LTYP(J).EQ.71)THEN
+C====  Gaussian shell type (added 17/4/00 )
+      FF=SHELLGAUSSD(Q,RRA,RRB,DA,DB)
+      IF(IX.GE.0)THEN
+C==== compute the derivative for any adjusting parameters in the contrast
+      IF(ABS(PS(J)).GT.0.01)DL(J)=FF
+      IF(ABS(PS(J+1)).GT.(0.01).AND.(J+1).NE.IRX)DL(J+1)=V(J)*DB
+C==== check for a preceding refining radius:
+      IF( (J-1).GT.NX1)THEN
+      IF(ABS(PS(J-1)).GT.(0.01).AND.(J-1).NE.IRX)DL(J-1)=DL(J-1)+V(J)*DA
+      END IF
+      END IF
+C
+      END IF
+C
+      SUMF=SUMF+ FF*V(J)
+      RRA=RRB
+      SQRA=SQR
+      CQRA=CQR
+  350 CONTINUE
+C
+      IF(IX.LT.0)GOTO 370
+      FF=2.0*SUMF*WTR(I)
+C====   modify derivs to allow for squaring operation
+      DO 360 J=NX1,NX2
+c====  360 DL(J)=DL(J)*FF
+  360 D(J)=D(J)+ DL(J)*FF
+C==== APPLY CONSTRAINTS THEN ADD INTO DERIV ARRAY D()  note call to CONDER in
+C==== REFINE should not affect this as D(NX1) to D(NX2) should be zero on 
+C==== return from DERIV, which is why we use separate array DL() here
+C==== 11/11/94 however in mult-set fits derivs constraints were not working
+c==== - being done twice, once here & once in REFINE, so remove here !
+C====      CALL CONDER(1,NC,DL,DL)
+C====      DO 365 J=1,NP
+C====  365 D(J)=D(J)+DL(J)
+C==== NOW SQUARE TO GET INTENSITY   WTR() includes the polydispersity see WTSET
+  370 SUM=SUM+SUMF*SUMF*WTR(I)
+c====          END OF LOOP OVER CONTRAST 
+      SUMP=SUMP+WTR(I)
+      SUM1=SUM1+SUMF*WTR(I)
+  400 CONTINUE
+C====           END OF LOOP OVER POLYDISPERSE RADII
+ 3000 RETURN
+      END
+C
+      SUBROUTINE WTSET(NPAR,R1,R2,NSIMP)
+C==== SET UP WEIGHTS FOR QUADRATURE INTEGRATIONS, modified RKH 23/3/93
+C==== Normal quadrature weights are multiplied by P(R) polydispersity
+C==== NSIMP is number of points for METH=2 Simpson integration.
+C====
+C==== Copyright R.K.Heenan 24/3/93
+      INCLUDE 'FISHDIM.PAR'
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+C==== catch NMETH=0 for trapezium rule case
+      IF(IABS(NMETH(NPAR)).LE.1)THEN
+      write(js,299)npar,nmeth(npar)
+299   format(1x,'CHECK ?? WTSET called with NMETH(',i3,')=',i4)
+      RETURN
+      END IF
+      CALL QUADSET(NPAR,R1,R2,NSIMP)
+      II=IB(IQ(NPAR))
+      DO I=II+1,II+NGPT(IQ(NPAR))
+      R=RG(I)
+      WTR(I)=WTR(I)*PFUNCT(R,IERR)
+      END DO
+      IF(IERR.EQ.0)RETURN
+      WRITE(JS,199)IERR
+      WRITE(JF,199)IERR
+  199 FORMAT(1X,'IERR=',I4,'  UNDER OR OVERFLOW AVOIDED IN PFUNCT ',
+     *' CALLED FROM WTSET')
+      RETURN
+      END
+C
+      SUBROUTINE QUADSET(NPAR,R1,R2,NSIMP)
+C==== SET UP WEIGHTS FOR QUADRATURE INTEGRATIONS
+C==== 23/3/93 start to generalise the numerical integration schemes.
+c==== using common block /QUAD/
+c==== integration type is NMETH(NPAR)
+c==== NIQ is the no of internal integration scheme stores in use (up to NIQMAX)
+c==== IQ(NPAR) is the scheme for this model
+c==== NGPT( IQ(NPAR) ) is the number of points
+c==== the abscissae are in RG( IB( IQ(NPAR))+1 ) to 
+c====                      RG( IB( IQ(NPAR)) + NGPT( IQ(NPAR)) )
+C==== the weights likewise in WTR( )
+c==== the max dimension of NGPT() is NIQMAX
+c====  "   "     "      "  RG( ) & WTR( ) is NWTMAX
+c==== 
+c==== ALL NMETH( ) are initialised to -11 and NIQ set zero on reading 
+c==== in a MODEL, so as to prompt for choices of scheme.
+c==== Thus this routine simply increments NIQ each time it is called.
+C==== There should be no way to set a single NMETH back to -11, avoiding the
+c==== need to shuffle the RG & WTR storage if the size of the schem is 
+c==== increased.  
+c==== Integration test routines simply redefine the highest NIQ
+c==== for repeated tests, so the storage is no problem
+c
+C==== METH(NPAR) = 1 is not handled here and usually does a trapezium
+c====                rule or possibly a Simpson elsewhere.
+c====            = 2 is for Simpson 
+c====            = 3-9 are various quadrature stored here
+c====     = NEGATIVE gives additional diagnostic info., is then set POSITIVE
+c====       and rest of set up done as normal !
+c
+
+c
+C==== NSIMP is number of points for METH=2 Simpson integration.
+c==== WARNING ! its value may be changed here, so pass a variable, not a
+c==== constant to avoid access violations !
+C====
+C==== Copyright R.K.Heenan 1993
+c==== now the local storage for the condensed tables below:
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION NPTS(7),ABSG(73),WTPT(73),ISTART(7)
+c
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+c
+c
+C===== GAUSS (-LEGENDRE)  QUADRATURES FROM  NUMERICAL ANALYSIS, Z.KOPAL,
+C===== 2ND ED. 1961,P562.
+C==== QUADRATURES FOR FUNCTIONS WITH INTEGRABLE END POINT SINGULARITIES ARE
+C==== FROM C.G.HARRIS AND W.A.B.EVANS, INTERN.J.COMPUTER MATH. 1977, B6, PP219-227.
+C==== ( OR CONSULT WABE AT PHYSICS LAB U.K.C.)
+C==== SEE WTPIC ROUTINE FOR FURTHER DETAILS
+C==== DO THE LARGE DATA STATEMENTS SLOW DOWN THINGS ON A PAGED MACHINE ???
+C==== THE UKC ICL-2960 IS GOOD TO ABOUT 16 OR 17 SIG. FIGS IN SINGLE PRECISION
+C====  6 & 8 pt quadratures removed and 32 & 64 pts added, 30/1/89 RKH
+C==== internal storage reorganised here.
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+      DATA NPTS/4,10,10,10,16,32,64/,ISTART/0,2,7,12,17,25,41/
+      DATA (ABSG(I),I=1,25)/0.33998 10435 84856,0.86113 63115 94053,
+c     * 0.23861 91860 83197, 0.66120 93864 66265, 0.93246 95142 03152,
+c     * 0.18343 46424 95650, 0.52553 24099 16329, 0.79666 64774 13627,
+c     * 0.96028 98564 97536,
+     * 0.14887 43389 81631, 0.43339 53941 29247, 0.67940 95682 99024,
+     * 0.86506 33666 88985, 0.97390 65285 17172,
+     *0.18091 77571 07814 58729, 0.51835 14557 73432 68107,
+     *0.78594 74856 43431 68204, 0.94846 74411 87358 47978,
+     *0.99802 37304 37446 09616,
+     *0.22950 37173 18283 98583, 0.63647 58400 91763 48145,
+     *0.90150 72053 31836 38718, 0.99283 83122 35203 529446,
+     *0.99998 43442 62340 8409287,
+     *0.09501 25098 37637, 0.28160 35507 79259, 0.45801 67776 57227,
+     *0.61787 62444 02644, 0.75540 44083 55003, 0.86563 12023 87832,
+     *0.94457 50230 73233, 0.98940 09349 91650/
+      DATA (WTPT(I),I=1,25)/0.65214 51548 62546,0.34785 48451 37454,
+c     * 0.46791 39345 72691, 0.36076 15730 48139, 0.17132 44923 79170,
+c     * 0.36268 37833 78362, 0.31370 66458 77887, 0.22238 10344 53374,
+c     *0.10122 85362 90376,
+     * 0.29552 42247 14753, 0.26926 67193 09996, 0.21908 63625 15982,
+     * 0.14945 13491 50581, 0.06667 13443 08688,
+     * 0.35771 17703 85933 47353, 0.30947 35695 74168 57411,
+     * 0.21970 11265 40725 80663, 0.10269 60498 68070 38392,
+     *0.01041 74836 31101 76181,
+     *0.45011 00825 38966 41997,0.34830 26851 77416 92339,
+     *0.17446 79766 18279 09007,0.02696 29977 21603 785257,
+     *0.00015 62579 43733 7813003,
+     *0.18945 06104 55068, 0.18260 34150 44924, 0.16915 65193 95003,
+     *0.14959 59888 16577, 0.12462 89712 55534, 0.09515 85116 82493,
+     *0.06225 35239 38648, 0.02715 24594 11754/
+C23456789012345678901234567890123456789012345678901234567890123456789012
+C==== 32 POINT from A.H.Stroud & D.Secrest "Gaussian quadrature formulas",
+C====  Prentice-Hall, 1966, Table one (which is tabulated to 30 sig figs,
+C====  rounded to 20 sig figs here)  ( RAL 519.66 )
+      DATA (ABSG(I),I=26,41)/0.04830766568 773816235,
+     * 0.1444719615 8279649349, 0.2392873622 5213707454,
+     * 0.3318686022 8212764978, 0.4213512761 3063534536,
+     * 0.5068999089 3222939002, 0.5877157572 4076232904,
+     * 0.6630442669 3021520098, 0.7321821187 4028968039,
+     * 0.7944837959 6794240696, 0.8493676137 3256997013,
+     * 0.8963211557 6605212397, 0.9349060759 3773968917,
+     * 0.9647622555 8750643077, 0.9856115115 4526833540,
+     * 0.9972683618 4948156354/
+      DATA (WTPT(I),I=26,41)/
+     * 0.09654008851 4727800567, 0.09563872007 9274859419,
+     * 0.09384439908 0804565639, 0.09117387869 5763884713,
+     * 0.08765209300 4403811143, 0.08331192422 6946755222,
+     * 0.07819389578 7070306472, 0.07234579410 8848506225,
+     * 0.06582222277 6361846838, 0.05868409347 8535547145,
+     * 0.05099805926 2376176196, 0.04283589802 2226680656,
+     * 0.03427386291 3021433103, 0.02539206530 9262059456,
+     * 0.01627439473 0905670605, 0.007018610009 4700966004/
+C==== 64 point, Stroud & Secrest
+      DATA (ABSG(I),I=42,73)/
+     * 0.02435029266 3424432509, 0.07299312178 7799039450,
+     * 0.1214628192 9612055447, 0.1696444204 2399281804,
+     * 0.2174236437 4000708415, 0.2646871622 0876741637,
+     * 0.3113228719 9021095616, 0.3572201583 3766811595,
+     * 0.4022701579 6399160370, 0.4463660172 5346408798,
+     * 0.4894031457 0705295748, 0.5312794640 1989454566,
+     * 0.5718956462 0263403428, 0.6111553551 7239325025,
+     * 0.6489654712 5465733986, 0.6852363130 5423324256,
+     * 0.7198818501 7161082685, 0.7528199072 6053189662,
+     * 0.7839723589 4334140761, 0.8132653151 2279755974,
+     * 0.8406292962 5258036275, 0.8659993981 5409281976,
+     * 0.8893154459 9511410585, 0.9105221370 7850280576,
+     * 0.9295691721 3193957582, 0.9464113748 5840281606,
+     * 0.9610087996 5205371892, 0.9733268277 8991096374,
+     * 0.9833362538 8462595693, 0.9910133714 7674432074,
+     * 0.9963401167 7195527934, 0.9993050417 3577213945/
+      DATA (WTPT(I),I=42,73)/
+     * 0.04869095700 9139720383, 0.04857546744 1503426935,
+     * 0.04834476223 4802957170, 0.04799938859 6458307728,
+     * 0.04754016571 4830308662, 0.04696818281 6210017325,
+     * 0.04628479658 1314417296, 0.04549162792 7418144479,
+     * 0.04459055816 3756563060, 0.04358372452 9323453377,
+     * 0.04247351512 3653589007, 0.04126256324 2623528610,
+     * 0.03995374113 2720341387, 0.03855015317 8615629129,
+     * 0.03705512854 0240046040, 0.03547221325 6882383811,
+     * 0.03380516183 7141609392, 0.03205792835 4851553585,
+     * 0.03023465707 2402478868, 0.02833967261 4259483228,
+     * 0.02637746971 5054658672, 0.02435270256 8710873338,
+     * 0.02227017380 8383254159, 0.02013482315 3530209372,
+     * 0.01795171577 5697343085, 0.01572603047 6024719322,
+     * 0.01346304789 6718642598, 0.01116813946 0131128819,
+     * 0.008846759826 3639477230, 0.006504457968 9783628561,
+     * 0.004147033260 5624676353, 0.001783280721 6964329473/
+C==== catch NMETH=0 for trapezium rule case
+      IF(ABS(NMETH(NPAR)).LT.2)THEN
+      write(js,299)npar,nmeth(npar)
+299   format(1x,'CHECK ?? QUADSET called with NMETH(',i3,')=',i4)
+      RETURN
+      END IF
+c==== check to see if this is a new scheme, if an old one we will be
+c==== recomputing the abscissae for a new range
+    5 IF(IQ(NPAR).LE.0)THEN
+        NIQ=NIQ+1
+
+        IF(NIQ.GT.NIQMAX)THEN
+          WRITE(JS,991)NIQMAX
+991   FORMAT(1X,'ERROR TOO MANY INTEGRATION SCHEMES (',I3,') REQUESTED !',
+     > /,'   WILL IGNORE THIS, WILL CRASH ....')
+          NIQ=NIQ-1
+          RETURN
+        END IF
+
+        IQ(NPAR)=NIQ
+        NSTORE=NIQ
+        IF(NIQ.GT.1)IB(NIQ)=IB(NIQ-1)+NGPT(NIQ-1)
+      ELSE
+        NSTORE=IQ(NPAR)
+      END IF
+c==== 14/12/95 catch the case where R1=R2 and we only need one point
+c==== a bit dangerous as not flagged, but could be called many times
+c==== from RODSHEAR
+      IF(ABS(R1-R2).LE.1.E-24)THEN
+      NGPT(NSTORE)=1      
+      RG(IB(NSTORE)+1)=R1
+      WTR(IB(NSTORE)+1)=1.000
+      RETURN
+      END IF
+C
+      METH=NMETH(NPAR)
+      IF(METH.LE.-3)GOTO 300
+   10 METH=METH-2
+C==== SAVE methods 1 & 2 for trapezium & Simpson
+      IF(METH.GT.7)METH=7
+
+C==== check for Simpson rule:
+      IF(METH.EQ.-2.OR.METH.EQ.0)THEN
+      IF(MOD(NSIMP,2).EQ.0)NSIMP=NSIMP-1
+      NSIMP=MAX(NSIMP,3)
+      NPT=NSIMP
+      ELSE
+c==== else look up number of points for this method
+      NPT=NPTS(METH)
+      END IF
+c
+C==== check to see if we need to re-arrange the existing storage space
+C==== 14/12/95 attempting to sort this out ! - now there are more integrations
+c      IF(NSTORE.LT.NIQ.AND.(IB(NSTORE)+NPT.GT.IB(NSTORE+1)) )THEN
+c      WRITE(6,993)NSTORE,IB(NSTORE), IB(NSTORE)+NPT, NIQ+1
+c993   FORMAT(1X,'QUADSET - ATTEMPT TO EXPAND AN EXISTING STORE',/,
+c     > 'NSTORE=',I2,'  FROM',I4,' TO',I4,', WILL TRY A NEW STORE ',I2)
+c      IQ(NPAR)=0
+c      GOTO 5
+      IF(NSTORE.LT.NIQ.AND.(IB(NSTORE)+NPT.GT.IB(NSTORE+1)) )THEN
+C==== copy up rest of storage to make space
+      WRITE(6,993)NSTORE,NIQ,(IB(I),I=1,NIQ)
+993   FORMAT(1X,'QUADSET -SHIFT NSTORE=',I2,' NIQ=',I2,' IB=',8I4)
+
+      J = NPT - NGPT(NSTORE)
+
+      IF(IB(NIQ)+NGPT(NIQ)+J.GT.NWTMAX)THEN
+      WRITE(JS,994)
+994   FORMAT(1X,'ERROR - QUADSET has run out of array space !',
+     > /,'new integration scheme NOT set up ! ',
+     > /,'previous one will NOT work !  (try K6= -11 to reset all ?)')
+      NMETH(NPAR)=-11
+      RETURN
+      END IF
+
+      DO I= IB(NIQ)+NGPT(NIQ), IB(NSTORE+1)+1, -1
+      WTR(I+J)=WTR(I)
+      RG(I+J)=RG(I)
+      END DO
+C
+      DO I = NSTORE+1,NIQ
+      IB(I) = IB(I) + J
+      END DO
+
+      WRITE(6,993)NSTORE,NIQ,(IB(I),I=1,NIQ)
+
+      IQ(NPAR)=0
+      GOTO 5
+      END IF
+
+      IF(IB(NSTORE)+NPT.GT.NWTMAX)THEN
+C==== should now only get here if NSTORE=NIQ
+      WRITE(JS,994)
+      NIQ=NIQ-1
+      NMETH(NPAR)=-11
+      RETURN
+      END IF
+c
+c=== storage all OK - now get on with the rest .....
+c
+      NGPT(NSTORE)=NPT
+      IF(METH.EQ.0.OR.METH.EQ.-2)GOTO 800
+
+      K=NPT/2
+      J=K+1
+      RB=0.5*(R1+R2)
+      A=0.5*(R2-R1)
+      IERR=0
+C==== THIS ONLY WORKS FOR EVEN NO. OF POINTS IN QUADRATURE USED.
+C==== A SINGLE INTERVAL IS TAKEN, IT IS MORE ACCURATE TO USE SAY A
+C==== 10 POINT THAN  TWO FIVE POINTS ON HALF INTERVALS.
+      DO 100 I=1,K
+      J=J-1
+      R=RB-ABSG(ISTART(METH)+J)*A
+      RG(IB(NSTORE)+I)=R
+  100 WTR(IB(NSTORE)+I)=WTPT(ISTART(METH)+J)*A
+      K=K+1
+      J=0
+      DO 200 I=K,NPT
+      J=J+1
+      R=RB+ABSG(ISTART(METH)+J)*A
+      RG(IB(NSTORE)+I)=R
+  200 WTR(IB(NSTORE)+I)=WTPT(ISTART(METH)+J)*A
+      RETURN
+c
+C==== SPECIAL PART ADDED FOR SIMPSON RULE 3/10/88
+  800 II=NSIMP-1
+C==== the odd numbered points
+      DO I=1,NSIMP,2
+      WTR(IB(NSTORE)+I)=2.0
+      END DO
+      WTR(IB(NSTORE)+1)=1.0
+      WTR(IB(NSTORE)+NSIMP)=1.0
+C==== the even numbers
+      DO I=2,II,2
+      WTR(IB(NSTORE)+I)=4.0
+      END DO
+C==== adjust the weights to final values
+      R=R1
+      DR=(R2-R1)/II
+      WW=DR/3.0
+      DO I=1,NSIMP
+      RG(IB(NSTORE)+I)=R
+      WTR(IB(NSTORE)+I)=WTR(IB(NSTORE)+I)*WW
+      R=R+DR
+      END DO
+      IF(METH.EQ.-2)THEN
+      WRITE(JS,803)NSIMP
+      DO I=1,NSIMP
+      WRITE(JS,804)I,RG(IB(NSTORE)+I),WTR(IB(NSTORE)+I)
+      END DO
+  803 FORMAT(/,1X,'ABSCISSA AND WEIGHTS, METH=2, SIMPSON RULE, ',I4,' POINTS')
+  804 FORMAT(1X,I4,2F16.8)
+      NMETH(NPAR)=2
+      ENDIF
+      RETURN
+C====     
+  300 WRITE(JS,301)
+      READ(IS,*,ERR=300)K,I
+      IF(I.EQ.0)GOTO 350
+  301 FORMAT(/,1X,'LIST QUADRATURE ABSCISSA AND WTS ,METH=I (2-9),TO J=1-',
+     *'SCREEN, 2-LP',/,1X,'I,J=  (*)')
+      IJ=JS
+      IF(I.EQ.2)IJ=JF
+      K=K-2
+      IF(K.GT.7)K=7
+      J=NPTS(K)/2
+      I1=ISTART(K)+1
+      I2=I1+J-1
+      WRITE(IJ,303)K+2
+  303 FORMAT(/,1X,'RAW ABSCISSA AND WEIGHTS FOR QUADRATURE METHOD=',I4)
+      WRITE(IJ,302)(ABSG(I),WTPT(I),I=I1,I2)
+  302 FORMAT(1X,2F25.20)
+      WRITE(IJ,302)
+      GOTO 300
+  350 METH=-METH
+      GOTO 10
+      END
+C
+      SUBROUTINE WTPIC(P,PM)
+C==== HELP USER TO CHOOSE BEST INTEGRATION SCHEME BY DOING TRIAL CALCULATIONS
+C==== SET METH OR METH2 NEGATIVE  I.E. K6 OR K7 = -1 TO GET HERE
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985.
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN),PM(10)
+      CHARACTER*8 SCH(9)
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,IX,NX1,NX2,IRX,
+     >     LS2(12),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+C==== CHANGE THIS AND ROUTINE POLSET TO ALTER FORM OF DISTRIBUTION
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      DATA SCH/'TRAP/SIM','SIMPSON ','GAUSS  4','GAUSS 10','RT+LN 10',
+     *         'GEN   10','GAUSS 16','GAUSS 32','GAUSS 64'/
+c==== 29/3/93 changed the scheme numbers around
+C==== TO INCREASE THE NUMBER OF METHODS BOTH THIS AND QUADSET NEED TO BE ALTERED
+C==== NOTE method 1 & 2 are not allowed with model 10
+      I1=1
+      IF(IX.EQ.2)I1=3
+   10 WRITE(JS,101)I1
+  101 FORMAT(1X,'INTEGRATION SCHEME FOR I(Q) K6 =  (*)',
+     * /,1X,'( ',I1,'-9, -VE TO LIST WEIGHTS, -11 TO TEST ALL,',
+     *' SET K6<0 TO GET HERE )' )
+c      READ(IS,*,ERR=10)M1
+c     integrationscheme
+      M1=9
+      IF(IABS(M1).LT.I1)GOTO 10
+      IF(M1.NE.(-11))GOTO 90
+      WRITE(JS,102)
+  102 FORMAT(1X,'TEST AT Q= ?  (*)')
+      READ(IS,*,ERR=10)QQ
+      WRITE(JF,104)QQ
+  104 FORMAT(/1X,'TEST INTEGRATIONS AT Q=',1PE12.4,
+     *'   ( MAY NOT BE NORMALISED ), NSIMP=',I4)
+      WRITE(JS,1031)NSIMP
+      WRITE(JF,1031)NSIMP
+ 1031 FORMAT(1X,'NSIMP=',I4,/,
+     > 6X,'Method  ','   F**2(Q)   ','     F(Q)       ','   SUMX')
+  103 FORMAT(1X,I3,2X,A8,2X,1P3E14.6)
+      DO 50 I=I1,9
+      NMETH(NPP)=I
+      IF(I.GE.2)CALL WTSET(NPP,PR1,PR2,NSIMP)
+C====  change sign of IX to supress deriv calcs in POLCAL for model 10
+      IX=-IX
+      CALL POLCAL(QQ,P,SUM,SUMF,SUMX)
+      IX=-IX
+      WRITE(JF,103)I,SCH(I),SUM,SUMF,SUMX
+   50 WRITE(JS,103)I,SCH(I),SUM,SUMF,SUMX
+      GOTO 10
+c
+c
+   90 NMETH(NPP)=M1
+      IF(IABS(M1).GE.2)CALL WTSET(NPP,PR1,PR2,NSIMP)
+  210 WRITE(JS,201)NSIMP
+  201 FORMAT(1X,'NSIMP=',I4,/,
+     > 1X,'INTEGRATION SCHEME FOR MOMENTS OF P(R), K7= (*)')
+c     integrationscheme
+      M2=9
+c      READ(IS,*,ERR=210)M2
+      IF(IABS(M2).LT.I1)GOTO 210
+      IF(M2.NE.(-11))GOTO 290
+      WRITE(JF,103)
+  203 FORMAT(1X,I3,1X,A8,1X,'V=',1PE11.3,' SIG*2=',E10.2,' RBAR=',
+     * E11.3,' ENT=',E10.2)
+      DO 250 I=I1,9
+      NMETH(NPP1)=I
+      IF(I.GE.2)CALL WTSET(NPP1,PR1,PR2,NSIMP)
+      CALL POLMOM(PM,P)
+      WRITE(JS,203)I,SCH(I),PM(1),PM(3),PM(4),PM(6)
+  250 WRITE(JF,203)I,SCH(I),PM(1),PM(3),PM(4),PM(6)
+      GOTO 210
+c
+c
+  290 NMETH(NPP1)=M2
+      IF(IABS(M2).GE.2)CALL WTSET(NPP1,PR1,PR2,NSIMP)
+      RETURN
+      END
+C
+      SUBROUTINE POLDER(Q,P,POLA,DSUMF,DSUMX,DP,DF,DX)
+C==== NUMERICAL CALC OF DERIVATIVES OF INTENSITY WITH RESPECT TO REFINING
+C==== PARAMETERS OF MODEL 6 POLYDISPERSITY AT ONE PARTICULAR Q VALUE
+C==== IS CALLED ONCE PER Q VALUE FROM ROUTINE DERIV
+C==== [ NOT TO BE CONFUSED WITH ROUTINE PREDER WHICH IS QUITE DIFFERENT ]
+c==== 05/08/03 include VOLP() to get vol normalisation correct
+C
+C==== CHECK THIS for problems with model 10 and if so the need to avoid
+c==== taking derivs with model 2 parameters ( or model 5 obs)
+c
+C==== There are simpler methods for parameters like R1 and R2  which would
+C==== simply add or subtract the last piece of the R distribution. However
+C==== the numerical approach is probably just as quick if using quadrature.
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985.
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+C==== HERE USE E(1,JY) SPACE AS P(), TEMP SPACE SAVES RECALC OF P() AT
+C==== END OF EACH CALL TO THIS ROUTINE, BUT NO TEMP. SPACE FOR QUADRATURE (YET??)
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN),DP(MV),DF(MV),DX(MV)
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,IX,NX1,NX2,IRX,
+     >     LS2(12),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      COMMON/WORK/DWE(MI),D(MV),DWD2(MI,MI),
+     * V2(MV),PM(10),PM2(10),DD(MV,3),WT(10),DBIG(MI,MN),FILL(1859)
+      COMMON/CH/IS,IDF,IL,JS,JDF,JF,JL,JP
+C==== SWAP SIGN OF IX TO STOP MODEL 10 CONTRAST DERIV CALCS IN POLCAL
+      IX=-IX
+      DO 100 I=NPP,NPM
+      IF(ABS(PS(I)).LT.0.01)GOTO 100
+C==== ALL THIS IS TO RECOGNISE THE SCALE FACTOR, FOR WHICH THE DERIVATIVE IS TRIVIAL
+      IF(I.NE.NPP)GOTO 50
+      IF(JPD.NE.1)GOTO 50
+      IF(ABS(POLA).LT.1.E-36)GOTO 100
+      D(I)=POLA/V(I)
+      DP(I)=D(I)
+      DF(I)=DSUMF/V(I)
+      DX(I)=DSUMX/V(I)
+      GOTO 100
+   50 V(I)=V(I)+DEL(I)
+C==== PCALC use normal VNORM, but POLSET has computed volume correction for
+c==== shifted params in VOLP()
+      CALL PCALC(P,NPP)
+      CALL POLCAL(Q,P,POLB,BSUMF,BSUMX)
+      D(I)=(POLB*VOLP(I) - POLA)/DEL(I)
+      DP(I)=D(I)
+      DF(I)=(BSUMF*VOLP(I) - DSUMF)/DEL(I)
+      DX(I)=(BSUMX*VOLP(I) - DSUMX)/DEL(I)
+      V(I)=V(I)-DEL(I)
+  100 CONTINUE
+      IF(NMETH(NPP).NE.0) CALL PCALC(P,NPP)
+      ABC(1)=PR1
+      ABC(2)=CON(4)
+      IX=-IX
+      RETURN
+      END
+C
+      SUBROUTINE PREDER(NCUSE,P)
+C==== DERIVATIVES FOR PREDICATE OBSERVATIONS - BOTH "NORMAL" ONES
+C==== AND SPECIAL OBSERVATIONS SUCH AS VOLUME OF A POLYDISPERSE SYSTEM
+C==== THIS IS CALLED FROM ROUTINE REFINE BEFORE CALCULATING NORMAL 
+C==== DERIV OF INTENSITY BUT AFTER COUNTING UP NPR REFINING PARAMETERS
+C==== AND SETTING ID()      [ NOT TO BE CONFUSED WITH ROUTINE POLDER WHICH
+C==== IS QUITE DIFFERENT ]
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985.
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+C==== ASSUME P() IS TEMPORARY STORE SPACE
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN)
+      COMMON/POLY/PR1,PR2,NR1,NR2,AB(2),VNORM,ABC(2),RB,PA,PB,PC,PD,IPD,
+     *       JPD,NPP,NPP1,NPP2,NPP3,NPM,NSIMP
+C==== NPRED IS SET ZERO IN REFINE AND IS PASSED IN THIS VERSION OF /TWO/
+C==== ELSEWHERE IT IS LS(5) OR SIMILAR
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/THREE/JD(MF),JC(MF),JB(MF),JY(MF),JW(MF),JAM(MF),JPQ(MF),
+     * JSQ(MF),JBT(MF),JXX(MF),LCOM(80,4),NOREF,NOWT,SSE,FIT(MF),
+     * VAR,XDWE,NPSMEAR
+      COMMON/CH/IS,ID,IL,JS,JDF,JF,JL,JP
+C==== OOPS two occurences of PC
+      COMMON/TIE/PC1(12,MC),IMOD(12,MC),NCON(MC),NUSE(MC),NTIE(MV)
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      COMMON/WORK/DWE(MI),D(MV),DWD2(MI,MI),
+     * V2(MV),PM(10),PM2(10),DD(MV,3),WT(10),DBIG(MI,MN),FILL(1859)
+      COMMON/DMAT/IID(MV),DWD(MI,MI),SVW(MI),VV(MI,MI),COV(MI,MI)
+C
+C==== NORMAL PREDICATE OBSERVATIONS, SIMPLE DERIVATIVES, NEED TWO CARDS
+C==== MODEL 5, TYPE -J AND -J  FOR OBS AND IT'S WEIGHT RESPECTIVELY
+      KK=0
+      DO 150 IM=1,NP
+      IF(LM(IM).NE.5)GOTO 150
+      IF(KK.EQ.1)GOTO 145
+      J=LTYP(IM)
+      IF(J.GE.0.OR.LTYP(IM+1).NE.J)GOTO 150
+      J=-J
+      W=V(IM+1)
+      KK=1
+      IF(W.LT.1.E-12)GOTO 150
+      IF(ABS(PS(J)).LE.0.01)GOTO 150
+      EE=V(IM)-V(J)
+      NDAT=NDAT+1
+      NPRED=NPRED+1
+      SSE=SSE+W*EE*EE
+      IF(PS(J).LT.(-0.01)) GOTO 140
+C==== DERIV IS EXACTLY 1.0 SO ADDING TO DWE AND DWD IS EASY
+      DO 130 II=1,NPR
+      IF(IID(II).NE.J)GOTO 130
+      DWE(II)=DWE(II)+W*EE
+      DWD(II,II)=DWD(II,II)+W
+      GOTO 150
+  130 CONTINUE
+      GOTO 150
+C==== CONSTRAINED PARAMETER AS PREDICATE OBS. NEED ROUTINE CONDER 
+C====        TO DO A LINEAR TRANSFORMATION ON THE DERIVATIVE ARRAY
+  140 D(J)=1.0
+      CALL CONDER(NTIE(J),NTIE(J),D,D)
+      DO 144 I=1,NPR
+      II=IID(I)
+  144 D(II)=D(I)
+      WE=W*EE
+      DO 141 I=1,NPR
+  141 DWE(I)=DWE(I)+WE*D(I)
+      DO 142 I=1,NPR
+      DO 142 II=I,NPR
+  142 DWD(II,I)=DWD(II,I)+W*D(II)*D(I)
+      DO 143 I=1,NP
+  143 D(I)=0.0
+      GOTO 150
+  145 KK=0
+  150 CONTINUE
+C
+C==== NOW DO PARTICULAR, MORE COMPLEX, CALCS TO FIT POLDISPERSITY VOLUMES ETC.
+C====    IP=2 IS USED AS A FLAG WHEN SPECIAL PREDICATES ARE REFINING.
+      IP=1
+      IF(NPP.EQ.0)RETURN
+      DO 50 I=1,NP
+      IF(LM(I).NE.5)GOTO 50
+      IF(LTYP(I).NE.1)GOTO 50
+      NPV=I
+      GOTO 80
+   50 CONTINUE
+      RETURN
+C==== FOUND SPECIAL PREDICATE OBSERVATIONS, MODEL 5, REMEMBER THESE ARE DATA
+C==== AND ARE FUNCTIONS OF POLYDISPERSITY COEFFS. OF MODEL6
+C==== V(NPV)=V0   V(NPV+1)=WT OF OBS,   V(NPV+2)=SIG(R)/RBAR  V(NPV+3)=WT
+C==== CON(2)                            CON(3) ARE CALC VALUES
+C==== V(NPV+4)="ENTROPY", INTEGRAL OF F(R)LOGE(F(R))
+C==== V(NPV+5)= WT
+C==== NEED TO TAKE DERIVATIVES OF EACH OF THESE 3 OBSERVATIONS WITH RESPECT TO
+C==== ALL REFINING PARAMETERS.  IN GENERAL THESE WILL ONLY BE FOR MODEL 6
+C==== HOWEVER CONSTRAINTS OR MODEL 10 MULTI-SHELL MAY ALSO APPLY SO WE WILL
+C==== PLAY SAFE AND TRY ALL PARAMETERS.  THE CALCULATION IS ANALOGOUS TO THE
+C==== GENERAL ONE IN ROUTINE REFINE FOR "NORMAL" DATA.
+C
+   80 IF(V(NPV+1).LE.1.E-12.AND.V(NPV+3).LE.1.E-12.
+     * AND.V(NPV+5).LE.1.E-12)GOTO 900
+      DO 390 I=1,NP
+      DD(I,1)=0.0
+      DD(I,2)=0.0
+  390 DD(I,3)=0.0
+C==== LOOP OVER PARAMETERS, COMPUTE DERIVS FOR EACH OF 3 OBSERVATIONS
+C==== SIMULTANEOUSLY
+      WRITE(JS,398)
+  398 FORMAT(1X,' DEBUG V(I)     DEL(I)   SHIFT       VOL         SIGR/R',
+     > '        ENTROPY')
+      write(JS,393)PM(1),PM(2),PM(6)
+393   FORMAT(34X,1P3E15.7)
+      DO 400 I=1,NP
+      IF(ABS(PS(I)).LT.0.01.OR.PS(I).LT.-0.5.
+     > OR.LM(I).EQ.2.OR.LM(I).EQ.5)GOTO 400
+
+C==== LOOK FOR POLYDISP SCALE FACTOR, FOR WHICH THE DERIVATIVE IS TRIVIAL
+C==== AND IS NOT CALCULATED BY PCALC( ) WHICH USES VNORM FROM POLSET
+      IF(I.EQ.NPP.AND.JPD.EQ.1)THEN
+      DD(I,1)=1.0
+      DD(I,2)=0.0
+C==== chek that V(npp) is corect here ( I think not VNORM !) RKH 5/4/93
+      DD(I,3)=(PM(6)+PM(5))/V(NPP)
+C
+C DEBUG ONLY ...................
+      CALL PCALC(P,NPP1)
+C==== RECOMPUTE OBSERVATIONS IN WORK ARRAY PM2()
+      CALL POLMOM(PM2,P)
+      write(js,397)vnorm,pm(1),pm(5),pm(6),pm2(1),pm2(5),pm2(6)
+397   format(1x,'vnorm,vol,integ(p(r)),ent orig-',1p4e11.3,/,42x,3e11.3)
+C.... .....................
+      ELSE
+      A=DEL(I)
+C==== Could set up all these in the DELSET routine ???
+      IF(ABS(DEL(I)).LT.1.0E-30)A=V(I)*0.002
+      IF(ABS(V(I)).LT.1.0E-30)A=1.E-06
+      V(I)=V(I)+A
+C==== RECOMPUTE POLYDISP WITH SHIFTED PARAMETER IN ARRAY P() PASSED THROUGH CALL
+C====  P() IS ONLY USED IF METH=1 SIMPSON RULE
+      CALL PCALC(P,NPP1)
+C==== RECOMPUTE OBSERVATIONS IN WORK ARRAY PM2()
+      CALL POLMOM(PM2,P)
+C==== COMPARE WITH ORIGINAL VALUES IN PM() WHICH WAS FILLED IN POLSET
+399   FORMAT(1X,I3,1P3E10.3,3E15.7)
+      DD(I,1)=(PM2(1) - PM(1))/A
+      DD(I,2)=(PM2(2)-  PM(2))/A
+      DD(I,3)=(PM2(6) - PM(6))/A
+      V(I)=V(I)-DEL(I)
+      END IF
+      write(JS,399)I,V(I),DEL(I),A,PM2(1),PM2(2),PM2(6)
+C====      write(JS,399)I,V(I),A,dd(i,1),dd(i,2),dd(i,3)
+      IP=2
+  400 CONTINUE
+C==== FOR QUADRATURE METHOD HAVE TO FINALLY RECOMPUTE THE RG() AND WT() ARRAYS
+C==== FOR WHICH THE ORIGINALS WERE NOT SAVED
+      IF(NMETH(NPP1).GE.2)CALL PCALC(P,NPP1)
+      IF(IP.EQ.1)GOTO 900
+C
+C==== NOW ADD INTO THE DWD AND DWE ARRAYS FOR EACH OF THE THREE OBSERVATIONS
+      JJ=NPV-2
+C==== LOOP OVER THREE PIECES OF DATA
+      DO 500 J=1,3
+      JJ=JJ+2
+      W=V(JJ+1)
+      IF(W.LE.1.E-12)GOTO 500
+C==== APPLY CONSTRAINTS TO DERIVS
+      IF(NCUSE.EQ.1)CALL CONDER(1,NC,DD(1,J),DD(1,J))
+C==== COMPRESS TO REMOVE NON-REFINING PARAMETERS
+      DO 420 I=1,NPR
+      II=IID(I)
+  420 DD(I,J)=DD(II,J)
+C====   FIND   EE = OBS-CALC
+      IF(J.NE.3)EE=V(JJ)-PM(J)
+      IF(J.EQ.3)EE=V(JJ)-PM(6)
+      WE=W*EE
+      NDAT=NDAT+1
+      NPRED=NPRED+1
+      SSE=SSE+WE*EE
+      DO 430 I=1,NPR
+  430 DWE(I)=DWE(I)+WE*DD(I,J)
+      DO 440 I=1,NPR
+      DO 440 II=I,NPR
+  440 DWD(II,I)=DWD(II,I)+W*DD(I,J)*DD(II,J)
+  500 CONTINUE
+  900 RETURN
+      END
+C
+      SUBROUTINE POLMOM(PM,P)
+C==== just to be awkward this routine ASSUMES integration scheme NMETH(NPP1) !
+c==== Beware, several bugs were caused by changing the NPP scheme instead of
+c==== the NPP1 scheme !  2/4/93 RKH
+c
+C==== NUMERICAL CALCULATION OF MOMENTS PM() OF POLYDISPERSITY SIZE
+C==== DISTRIBUTION P()
+C====   PM(1)    VOLUME, 
+C====   PM(2)    SIGMA(R)/RBAR,
+C====   PM(3)    SIGMA**2
+C====   PM(4)    MEAN R
+C====   PM(5)    INTEGRAL OF P(R)
+C====   PM(6)    "ENTROPY"
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 1985.
+C==== written by R.K.Heenan at UKC and RAL 1983-1986
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION PM(10),P(MN)
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      J=NR1
+      R=PR1
+      DR=CON(4)
+      S1=0.0
+      S2=0.0
+      S3=0.0
+      S4=0.0
+      ENT=0.0
+      IF(NMETH(NPP1).GT.1)GOTO 500
+C
+C==== USE SIMPSON'S RULE ( 0.5, 2, 1, 2, 1, 2, .... 2, 0.5)*2*DR/3
+C==== FORCE ODD NO. OF POINTS >=3. FOR 2 PTS AND LEFTOVER BIT
+C==== USE TRAPEZIUM RULE
+      IF(NR2-NR1.LE.1)GOTO 250
+      J=MOD(NR2-NR1,2)
+      J=NR2-J
+      A=1.0
+      B=2.0
+      DO 200 I=NR1,J
+      T=A*P(I)
+      S1=S1+T
+      S2=S2+T*R
+      S3=S3+T*R*R
+      S4=S4+T*R**3
+      ENT=ENT+T*ALG(P(I))
+      X=A
+      A=B
+      B=X
+  200 R=R+DR
+C==== CORRECTIONS FOR FIRST AND LAST POINTS (NR1 AND
+C==== NR2 ARE ALREADY DIVIDED BY 2, BUT NR2-1 IS NOT )
+C==== THIS IS MESSY FOR THE ENTROPY SUM AS THE LOG DOES NOT SCALE
+C==== START BY SCALING THE ANSWERS AND REDUCING THE CONTRIBUTION OF THE
+C==== LAST TERM IF THIS WAS NR2-1 RATHER THAN NR2
+      T=-0.5*T
+      IF(J.EQ.NR2)T=0.0
+      A=2.*DR/3.0
+      S1=(S1+T)*A
+      S2=(S2+T*R)*A
+      S3=(S3+T*R*R)*A
+      S4=(S4+T*R**3)*A
+      IF(J.EQ.NR2)ENT=(ENT-P(J)*ALG(P(J)) + P(J)*ALG(2.0*P(J)) )*A
+C2345 789012345678901234567890123456789012345678901234567890123456789012
+      IF(J.EQ.NR2)GOTO 300
+      ENT=(ENT -0.5*P(J)*ALG(P(J)) )*A
+C==== IF THERE WERE AN EVEN NO. OF DATA THEN J=NR2-1 AND THE LAST BIT
+C==== USES THE TRAPEZIUM RULE  0.5*( P(NR2)+P(J) )*DR
+  250 A=PR2
+      B=P(NR2)*DR
+      T=PR2-DR
+      X=P(J)*DR
+C==== IF THERE ARE ONLY TWO POINTS J=NR1 AND P(NR1) HAS ALREADY BEEN HALVED
+      IF(J.NE.NR1)X=0.5*X
+      S1=S1+B+X
+      S2=S2+B*A + X*T
+      S3=S3+B*A*A + X*T*T
+      S4=S4+B*A**3 + X*T**3
+      IF(J.NE.NR1)ENT=ENT+ B*ALG(2.0*P(NR2)) + X*ALG(P(J))
+      IF(J.EQ.NR1)ENT=ENT+ B*ALG(2.0*P(NR2)) + X*ALG(2.0*P(J))
+C
+  300 PM(1)=4.*3.141592654*S4/3.0
+      IF(ABS(S1).LT.1.E-18)S1=1.0101010101
+      PM(4)=S2/S1
+      PM(3)=S3/S1-PM(4)*PM(4)
+      IF(PM(3).LT.0.0)PM(3)=1.01010101
+      IF(ABS(PM(4)).LT.1.E-18)PM(4)=1.0101010101
+      PM(2)=SQRT(PM(3))/PM(4)
+      PM(5)=S1
+C==== NOW PUT THE MINUS SIGN INTO THE ENTROPY SUM AND DO THE ESTIMATOR SCALING
+C====  ENT= - INTEGRAL( P(R)LOGE( P(R)/B ) 
+C====     = -INTEGRAL( P(R)LOGE( P(R) ) - INTEGRAL( P(R) )*LOGE(1/B)
+      PM(6)=-ENT+S1*ALG(CON(7))
+C==== ENTROPY NEEDS TO BE CALCULATED WITH P(R) NORMALISED TO UNITY
+C====  ENT'= ENT(P(R)/S1) = INTEGRAL( P(R)LOGE( P(R)/B/S1) )/S1
+C====      =  INTEGRAL(P(R)LOGE(P(R)/B )/S1  - INTEGRAL( P(R))*LOGE(1/S1)/S1
+C===       =        ENT/S1                + S1*LOGE(S1)/S1
+      PM(6)=PM(6)/S1 + ALG(S1)
+      RETURN
+C
+C==== QUADRATURE METHODS
+  500 II=IB(IQ(NPP1))
+      DO 550 I=II+1,II+NGPT(IQ(NPP1))
+      R=RG(I)
+      T=WTR(I)
+      S1=S1+T
+      S2=S2+T*R
+      S3=S3+T*R*R
+      S4=S4+T*R*R*R
+C==== 31/3/93 oops don't forget that WTR() has polydisp P(R) * Weight(R)
+C==== so entropy calc by quadrature has been WRONG until now !
+c====  was  550 ENT=ENT+T*ALG(T)
+  550 ENT=ENT+T*ALG(PFUNCT(R,IERR))
+      GOTO 300
+      END
+C
+      SUBROUTINE POLVOL(VOL,P)
+C==== just to be awkward this routine ASSUMES integration scheme NMETH(NPP1) !
+c==== Beware, several bugs were caused by changing the NPP scheme instead of
+c==== the NPP1 scheme !  2/4/93 RKH
+C==== 05/08/03 reduced version of POLMON to calc only the volume
+c
+C==== NUMERICAL CALCULATION OF MOMENTS PM() OF POLYDISPERSITY SIZE
+C==== DISTRIBUTION P()
+C==== these data analysis programs are for use only by authorised persons
+C==== Copyright R.K.Heenan 2003
+      INCLUDE 'FISHDIM.PAR'
+      DIMENSION P(MN)
+      COMMON/TWO/NT,NP,NS,NC,NN,NNN(11),IW,IK,IP,MS,IY,LS(3),NPRED,
+     >     NDAT,NYC,NPR,LS2(16),LM(MV),LTYP(MV),LPAR(3,MV),V(MV),
+     >     ESD(MV),PS(MV),IDEL(MV),DEL(MV),DV(MV),VOLP(MV),CON(24)
+      COMMON/POLY/PR1,PR2,NR1,NR2,ABC(5),RB,PA,PB,PC,PD,IPD,JPD,NPP,
+     *       NPP1,NPP2,NPP3,NPM,NSIMP
+      COMMON/QUAD/NMETH(MV),NIQ,NIQMAX,NWTMAX,IQ(MV),NGPT(8),IB(8),
+     >            RG(2048),WTR(2048)
+      J=NR1
+      R=PR1
+      DR=CON(4)
+      S4=0.0
+      ENT=0.0
+      IF(NMETH(NPP1).GT.1)GOTO 500
+C
+C==== USE SIMPSON'S RULE ( 0.5, 2, 1, 2, 1, 2, .... 2, 0.5)*2*DR/3
+C==== FORCE ODD NO. OF POINTS >=3. FOR 2 PTS AND LEFTOVER BIT
+C==== USE TRAPEZIUM RULE
+      IF(NR2-NR1.LE.1)GOTO 250
+      J=MOD(NR2-NR1,2)
+      J=NR2-J
+      A=1.0
+      B=2.0
+      DO 200 I=NR1,J
+      T=A*P(I)
+      S4=S4+T*R**3
+      X=A
+      A=B
+      B=X
+  200 R=R+DR
+C==== CORRECTIONS FOR FIRST AND LAST POINTS (NR1 AND
+C==== NR2 ARE ALREADY DIVIDED BY 2, BUT NR2-1 IS NOT )
+C==== THIS IS MESSY FOR THE ENTROPY SUM AS THE LOG DOES NOT SCALE
+C==== START BY SCALING THE ANSWERS AND REDUCING THE CONTRIBUTION OF THE
+C==== LAST TERM IF THIS WAS NR2-1 RATHER THAN NR2
+      T=-0.5*T
+      IF(J.EQ.NR2)T=0.0
+      A=2.*DR/3.0
+      S4=(S4+T*R**3)*A
+      IF(J.EQ.NR2)GOTO 300
+C==== IF THERE WERE AN EVEN NO. OF DATA THEN J=NR2-1 AND THE LAST BIT
+C==== USES THE TRAPEZIUM RULE  0.5*( P(NR2)+P(J) )*DR
+  250 A=PR2
+      B=P(NR2)*DR
+      T=PR2-DR
+      X=P(J)*DR
+C==== IF THERE ARE ONLY TWO POINTS J=NR1 AND P(NR1) HAS ALREADY BEEN HALVED
+      IF(J.NE.NR1)X=0.5*X
+      S4=S4+B*A**3 + X*T**3
+C
+  300 VOL=4.*3.141592654*S4/3.0
+      RETURN
+C
+C==== QUADRATURE METHODS
+  500 II=IB(IQ(NPP1))
+      DO 550 I=II+1,II+NGPT(IQ(NPP1))
+      R=RG(I)
+      T=WTR(I)
+  550 S4=S4+T*R*R*R
+      VOL=4.*3.141592654*S4/3.0
+      RETURN
+      END
+C
+C====                  NATURAL LOG FUNCTION, AVOIDING ERROR IF X.LE.0.0
+C==== used in POLMON( ) entropy calcs
+      FUNCTION ALG(X)
+      ALG=0.0
+c==== 31/3/93 found this as 0.0E-36 ??? RKH
+      IF(X.GT.1.0E-36)ALG=ALOG(X)
+      RETURN
+      END
+	

@@ -1,0 +1,42 @@
+/* Launcher for Fish on Windows
+   Optional parameter -console shows console window */
+
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
+#include <shellapi.h>
+
+int main(int argc, char *argv[]) {
+
+  char cmd[256];
+  char args[256];
+  int win;
+  int ret;
+
+  sprintf (cmd,"javaw.exe");
+  win = SW_SHOWNORMAL;
+
+  if(argc > 1){
+    if(strcmp (argv[1], "-console") == 0) {
+      sprintf (cmd,"java.exe");
+      win = SW_SHOWNORMAL;
+    }
+  }
+
+  sprintf (args,"-cp \"bin;lib\\\\jcommon-1.0.23.jar;lib\\\\jfreechart-1.0.19.jar\" -Djava.library.path=bin fish.Fish");
+
+  ret = (int)ShellExecute(NULL, "open", cmd, args, NULL, win);
+
+  if(ret<=32){
+	 MessageBox(      
+    	NULL,
+    	"Fish was unable to start Java. Please ensure that you have\nJava version 5 or later and that it is installed correctly.\nUninstalling then re-installing Java often resolves this problem.",
+    	"Fish startup error",
+    	MB_OK
+	);
+	exit(1);
+  }
+
+  exit(0);
+
+}

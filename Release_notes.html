@@ -1,0 +1,149 @@
+<html>
+<head>
+<title>
+Fish release notes
+</title>
+</head>
+<body>
+<h1>Fish <small> (version 3.96)</small> <img src="bin/fish/fish.png" width="32" height="32" alt="Fish icon" /></h1>
+<h2>About these release notes</h2>
+<p>These notes describe how to use the new graphical interface. For details of how to proceed with a fit, and of the models included with Fish, please refer to manual for Fish version 2.</p>
+
+<h2>Requirements</h2>
+<ul>
+<li>Windows and Linux are now supported. You need the correct Fish distribution for your operating system.</li>
+<li>You will need Java runtime environment version 5 (also known as Java 2RE version 1.5) <strong>or later</strong>. If you can view Java applets on web pages, you probably have this already. Otherwise, it can be downloaded from the <a href="http://java.com/download">Java website</a>.</li>
+</ul>
+
+<h2>Installation</h2>
+<p>Uncompress the zip file in the location in which you wish to keep Fish.</p>
+
+<h2>Starting Fish</h2>
+<p>Run <code>fish.exe</code> (in Windows) or <code>fish</code> (Linux) to start Fish. The main Fish window and a plot window should appear after a few seconds.</p>
+<p>If you start Fish from a console window, you can add the parameter <code>-console</code>. This runs Fish with terminal output visible, which may be useful for debugging purposes. For example:<br />
+<code>fish -console</code></p>
+
+<h3>Starting Fish for the first time</h3>
+<p>The first time you use Fish, you will see a window that asks you to specify a working directory and a model file. These are equivalent to the values previously stored in <code>fishpref.txt</code>. You can either accept the default values, or you may choose a directory and model file you have used with earlier versions of Fish. Your choice will be saved so that you will not see this window each time you start Fish. The settings can be changed at a later date from Fish's <em>Preferences</em> menu.</p>
+
+<h2>Using Fish</h2>
+<p>The main window contains three tabs. These tabs represent the different steps that are necessary to start a fit, which you will be familiar with from earlier versions.</p>
+
+<h3>The Data tab</h3>
+
+<p>This tab allows you to load data files and choose which data sets to work with. Use the <em>Add file</em> button to add new data files to this list. If the file contains more than one dataset, they will all be listed.</p>
+
+<p>If you "hover" the mouse over the <em>Label</em> column of the table, you will see a "tool tip" containing details of the dataset.</p>
+
+<p>Select the checkboxes next to the datasets you wish to use in the fit. The number of sets you need will depend on the model you are going to use. For example, if you use the "General microemulsion" model supplied with Fish, you need to choose three sets. The set numbers used by the model are shown in the second column &ndash; you can double click these to edit and reassign them.</p>
+
+<p>By default, the range of datapoints used is as specified in the datafile. You can sent a different range by right clicking on an <em>active</em> dataset and choosing "Set range".</p>
+
+<h3>The model tab</h3>
+
+<p>This tab contains the list of currently loaded models. Select the one you wish to use during the fit. Again, hovering over the names of the models will show a tool tip with more details of the model.</p>
+
+<p>You can add additional model files to the list using the button at the bottom. Any models in the file will be added to the bottom of the list. If you edit a model (using a text editor, for example), right click the model in the model tab and choose "Refresh model file". This will re-read all the models contained in the same model file. To use the new version of the model, re-select it in the model list.</p>
+
+<h3>The fitting tab</h3>
+
+<p>This tab shows the familiar Fish fitting table. To enable a parameter for fitting (i.e. <code>n=ON</code> in the old Fish) ensure that its checkbox is selected.</p>
+
+<p>Click the large <em>Run</em> button at the bottom of the tab to run a cycle of the fit. The plot window will update immediately to show the progress of the fit. You can return to any previous cycle in the fit using the field in the bottom left corner. You can continue the fit from an earlier cycle if wish, or else use the "fast forward" button to return to the latest cycle.
+
+<p>The parameter values can be edited by double clicking them. Any changes will be reflected immediately in the plotting window.</p>
+
+<p>A goodness of fit parameter (equal to XDWE/SSR), lambda, and the variance are shown below the fitting table.</p>
+
+<h3>Fit Constants and Flags</h3>
+
+<p>This window allows you to view and set numerical constants (Nn), and also change controls flags (Kn). If you change any values, you must click Apply or OK for them to take effect.</p>
+
+<h3>Plot windows</h3>
+
+<p>You can open a new plot window by choosing "Plot > New window" from the main Fish menu bar. You can have as many active plotting windows as you wish.</p>
+
+<p>In each plot window, you can switch between linear and log axes using the <em>Axis</em> menu. The <em>Series</em> menu allows you to choose which data are shown on each plot. You can add series, remove them, or edit existing series. There is no limit to the number of series on a single plot. You could choose to show all the datasets on one plot, separated vertically if you wish; or you can use a separate plot window for each set. You could have two windows to show data on linear and logarithmic axes simultaneously. Spend some time using the "Edit series" dialog and decide which view works best for you.</p>
+
+<p>The <em>Plot</em> menu contains options to save or print the current plot. It also allows you to set plot properties such as adding a title or changing axis labels or colours.</p>
+
+<p>The <em>Window</em> menu allows you to choose a table of parameters or model description to display alongside the plot so that they can be included in any printouts. You can also choose to display the current date and time at the top of the plot, and toggle display of the legend. You can save these settings as the defaults for future new windows.</p>
+
+<p>Useful hint: when you choose <em>New window</em>, the plot window contains plots for the highest currently selected dataset. Therefore, if you choose <em>New window</em> after selecting the second set but before the third, the window will be ready to plot set 2 without you having to edit the series.</p>
+
+<p>Right clicking the plot window displays a popup menu that allows you to zoom in on the plot or re-scale the axes.</p>
+
+<h3>Saving data</h3>
+
+<p>The file menu allows you to save the current fit either as a <code>.q</code> data file, or as parameters in model file format.</p>
+
+<p>If you choose "Save as", a new file is created with your chosen name. If you overwrite an existing file, the previous contents of the file will be erased. If you subsequently choose "Save", the new data will be appended to the current file. Data is also added to the log file.</p>
+
+<h2>Feedback</h2>
+
+<p>Please send any feedback on the beta version of Fish to <a href="mailto:jonathan.rawle@diamond.ac.uk">jonathan.rawle@diamond.ac.uk</a>.</p>
+
+<p>Please report any bugs that you find in the program, and also any aspects of the program that do not work as your intuition said they should.</p>
+
+<p>Some advanced features are currently unavailable in this version of Fish. Please let me know which features you would like to see implemented next!</p>
+
+<h2>Changelog</h2>
+
+<h3>3.96</h3>
+<ul>
+<li>Fix broken <cite>Range</cite> command</li>
+<li>Move plot saving and printing to the plot window's menubar</li>
+<li>Add an icon (courtesy of Stephen King, ISIS)</li>
+</ul>
+
+<h3>3.95</h3>
+<ul>
+<li>Support for SAS XML data files</li>
+<li>XML and Rnils data files now shown in the file chooser by default</li>
+<li>Data range selector added</li>
+<li>Previous log file is now retained as a backup</li>
+<li>Slightly more intelligent selection of sets for new plot windows - will show lowest set not yet displayed</li>
+<li>Switched to Courier font for plot axes to correct spacing and missing characters on some printers</li>
+<li>Plot axes now take units from the first set displayed on the plot (currently only supported for XML data files)</li>
+<li>Data is plotted as soon as it is loaded, rather than waiting until a model is selected</li>
+</ul>
+
+<h3>3.94</h3>
+<ul>
+<li><cite>Save Data</cite> now gives a choice of which sets and which data are saved</li>
+<li>Fix occasional crashing when model changed while using ascii data files</li>
+<li>Shows a message on startup if Java can not be started</li>
+<li>Option to toggle legend and to save plot window settings as the defaults. Fixed bug where legend could disappear permanently</li>
+<li>Gives a warning and sets weights to 1/data when a data set does not include errors</li>
+<li>Internal labels and titles applied to datasets and models (used to annotate files when saving)</li>
+<li>Extra blank lines at end of .q file ignored</li>
+<li>Hourglass displayed when running a fit</li>
+</ul>
+
+<h3>3.93</h3>
+<ul>
+<li>Constants and Flags dialog added</li>
+<li>Optional parameter table or model description, and date and time, can be added to plot window</li>
+</ul>
+
+<h3>3.92</h2>
+<ul>
+<li>Linux support</li>
+<li>Will now read CSV and ASCII files (with or without column headers) and ILL "RNILS" format files
+<li>Redundant PGPLOT libraries and routines removed to reduce size of distribution</li>
+</ul>
+
+<h3>3.91</h3>
+<ul>
+<li>Models are now calculated and plotted as soon as they are loaded. Parameters can be changed to see the effect on the fit <em>before</em> running any cycles</li>
+<li>Model file handling features added: add, remove, remove single model</li>
+<li>Models highlighted when right clicking for pop-up menu</li>
+<li>Option to show model numbers; option to show SWSE, XDWE: statistics are also shown separately for each data set if multiple sets are in use</li>
+<li>Log/lin plot preferences can now be saved</li>
+<li>Size of plot symbols reduced so as not to obscure lines</li>
+</ul>
+
+<small>Jonathan Rawle<br />22 April 2008</small>
+
+</body>
+</html>

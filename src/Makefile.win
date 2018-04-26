@@ -1,0 +1,29 @@
+fish.dll: fish.o fish_wrap.o FISH1.o FISH2.o FISH3.o FISH4.o FISH5.o FISH6_DUMMY.o FISH7.o FISHDIM.PAR FISHGRAPH.o FISHMODEL.o fish_getwir.o fishqp1.o fishqp2.o fishqp3.o fishqpzero.o fishsmear.o fishsysG77.o launcher.exe fish.png
+	c:/MinGW/bin/mingw32-gfortran.exe -D_JNI_IMPLEMENTATION_ -Wl,--kill-at,--subsystem,windows -shared *.o -lgfortran -o fish.dll -mwindows -I.
+	copy fish.dll ..\bin\fish.dll
+	copy fish.dll ..\fish.dll
+	copy fish.png ..\bin\fish\fish.png
+
+fish.o fish_wrap.o: fish.c fish_wrap.c fish.h
+	c:/MinGW/bin/mingw32-gcc.exe -D_JNI_IMPLEMENTATION_ -c -Ic:/Program\ Files\ (x86)/Java/jdk1.7.0_79/include -Ic:/Program\ Files\ (x86)/Java/jdk1.7.0_79/include/win32 fish.c fish_wrap.c
+
+FISH1.o FISH2.o FISH3.o FISH4.o FISH5.o FISH6_DUMMY.o FISH7.o FISHGRAPH.o FISHMODEL.o fish_getwir.o fishqp1.o fishqp2.o fishqp3.o fishqpzero.o fishsmear.o fishsysG77.o: FISH1.F FISH2.F FISH3.F FISH4.F FISH5.F FISH6_DUMMY.F FISH7.F FISHDIM.PAR FISHGRAPH.F FISHMODEL.F PGCONTROL.INC PGPLOT.INC fhelpfit.txt fish_getwir.f fishqp1.f fishqp2.f fishqp3.f fishqpzero.f fishsmear.f fishsysG77.f rgb.txt 
+	c:/MinGW/bin/mingw32-gfortran.exe -c -s -fno-automatic -finit-local-zero -fno-backslash -ffixed-line-length-80 *.f *.F -mwindows -I.	
+
+fish_wrap.c: fish.h fish.i
+	c:\fish5\swigwin-3.0.12\swig.exe -outdir ../java/fish -package fish -module Core -java fish.i	
+
+clean:
+#	-rm fish.dll launcher.exe *.o fish_wrap.c ../hs_*.log
+	del fish.dll launcher.exe *.o fish_wrap.c
+# these remove files but do not delete the directories
+	del /Q ..\bin\fish
+	del /Q ..\bin
+
+
+launcher.exe: winlauncher.c icon.o
+	c:/MinGW/bin/mingw32-gcc.exe -Wl,--subsystem,windows -mwindows winlauncher.c icon.o -o launcher.exe
+	copy launcher.exe ..\fish.exe
+
+icon.o: fish.ico fish.rc
+	windres fish.rc icon.o
